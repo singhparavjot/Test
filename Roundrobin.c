@@ -1,5 +1,5 @@
 #include<stdio.h> 
-
+#include<string.h>
 int main() 
 { 
 int st[10],bt[10],wt[10],tat[10],n,tq; 
