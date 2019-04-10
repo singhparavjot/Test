@@ -1,2 +1,2 @@
 # Test
-This repository is about RoundRobin algorithm
+This repository is about RoundRobin algorithm and in C
