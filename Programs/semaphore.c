@@ -14,7 +14,7 @@ void signal()
 
 void process1()
 {
-   printf("WE are in process 1\n");
+   printf("we will rock you \n");
     wait();
    a++;
    signal();
