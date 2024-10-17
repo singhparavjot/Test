@@ -1,0 +1,4 @@
+Resources
+| where type == "microsoft.databricks/workspaces"
+| extend ClusterDetails = properties.clusterConfiguration
+| project name, ClusterDetails
