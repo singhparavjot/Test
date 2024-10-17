@@ -6,18 +6,17 @@ from azure.identity import DefaultAzureCredential
 # Set up authentication for Azure and Databricks
 subscription_id = "your_subscription_id"
 credential = DefaultAzureCredential()
-access_token = credential.get_token("https://management.azure.com/.default").token
 
-# Set up headers for Azure and Databricks APIs
+# Get Azure Management API token
+azure_management_token = credential.get_token("https://management.azure.com/.default").token
+
+# Get Databricks API token
+databricks_token = credential.get_token("https://databricks.azure.net/.default").token
+
+# Set up headers for Azure APIs
 azure_headers = {
-    'Authorization': f'Bearer {access_token}',
+    'Authorization': f'Bearer {azure_management_token}',
     'Content-Type': 'application/json'
-}
-
-# Set up your Databricks PAT (Personal Access Token) 
-databricks_token = "your_databricks_token"
-databricks_headers = {
-    'Authorization': f'Bearer {databricks_token}'
 }
 
 # Azure Cost Management API endpoint
@@ -25,18 +24,16 @@ cost_management_url = f"https://management.azure.com/subscriptions/{subscription
 
 # Define the time range for September 2024
 time_period = {
-    "type": "Custom",
-    "timeframe": "Custom",
-    "timePeriod": {
-        "from": "2024-09-01T00:00:00Z",
-        "to": "2024-09-30T23:59:59Z"
-    }
+    "from": "2024-09-01T00:00:00Z",
+    "to": "2024-09-30T23:59:59Z"
 }
 
 # Define the request body for cost data, filtering specifically for Databricks workspaces
 request_body = {
     "type": "Usage",
-    "dataSet": {
+    "timeframe": "Custom",
+    "timePeriod": time_period,
+    "dataset": {
         "granularity": "Daily",
         "aggregation": {
             "totalCost": {
@@ -57,35 +54,59 @@ request_body = {
                 "values": ["Microsoft.Databricks/workspaces"]
             }
         }
-    },
-    "timeframe": "Custom",
-    "timePeriod": time_period
+    }
 }
 
 # Retrieve cost data for the specified period
 response = requests.post(cost_management_url, headers=azure_headers, json=request_body)
 cost_data = response.json()
 
+# Function to get workspace URL from resource ID
+def get_workspace_url(resource_id):
+    workspace_url = f"https://management.azure.com{resource_id}?api-version=2018-04-01"
+    response = requests.get(workspace_url, headers=azure_headers)
+    if response.status_code == 200:
+        workspace_info = response.json()
+        properties = workspace_info.get('properties', {})
+        workspace_url = properties.get('workspaceUrl', '')
+        return workspace_url
+    else:
+        print(f"Failed to get workspace URL for {resource_id}")
+        return None
+
 # Prepare to store data for CSV
 csv_data = [["ResourceId", "Workspace Name", "Node Type", "Date", "Cost"]]
 
 # Loop through cost data and retrieve Databricks cluster information for node types
-for item in cost_data['data']['rows']:
+for item in cost_data['properties']['rows']:
     resource_id = item[0]
     cost_date = item[1]
     total_cost = item[2]
 
-    # Derive the workspace URL and call the Databricks API
-    workspace_name = resource_id.split('/')[-1]
-    host_name = f"{workspace_name}.azuredatabricks.net"
+    # Get the workspace URL
+    workspace_url = get_workspace_url(resource_id)
+
+    if not workspace_url:
+        continue
+
+    # Set up Databricks API headers for this workspace
+    databricks_headers = {
+        'Authorization': f'Bearer {databricks_token}',
+        'X-Databricks-Azure-Workspace-Resource-Id': resource_id
+    }
 
     # Retrieve cluster information for the workspace
-    clusters_url = f"https://{host_name}/api/2.0/clusters/list"
-    clusters_response = requests.get(clusters_url, headers=databricks_headers).json()
+    clusters_url = f"https://{workspace_url}/api/2.0/clusters/list"
+    clusters_response = requests.get(clusters_url, headers=databricks_headers)
+    if clusters_response.status_code != 200:
+        print(f"Failed to get clusters for workspace {workspace_url}")
+        continue
+    clusters_response_json = clusters_response.json()
 
     # Process each cluster and extract node type
-    for cluster in clusters_response.get('clusters', []):
+    for cluster in clusters_response_json.get('clusters', []):
         node_type = cluster.get('node_type_id', 'Unknown')
+        workspace_name = workspace_url.split('.')[0]  # Extract workspace name from URL
 
         # Append to CSV data
         csv_data.append([resource_id, workspace_name, node_type, cost_date, total_cost])
