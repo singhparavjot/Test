@@ -1,44 +1,87 @@
-# Connect to Azure account
-Connect-AzAccount
+import requests
+import csv
+from datetime import datetime
 
-# Set your subscription ID
-$SubscriptionId = "your-subscription-id"  # Replace with your actual subscription ID
-Select-AzSubscription -SubscriptionId $SubscriptionId
+# Set up authentication details and endpoints
+subscription_id = "your_subscription_id"
+resource_group = "your_resource_group"
+host_token = "your_PAT_token"
+api_version = "2021-10-01"  # Or update to the latest version if needed
 
-# Set the start and end dates for September 2024
-$StartDate = "2024-09-01"
-$EndDate = "2024-09-30"
+# Set up headers for Databricks REST API
+headers = {
+    'Authorization': f'Bearer {host_token}',
+    'Content-Type': 'application/json'
+}
 
-# Get consumption usage details for the specified time period
-$UsageDetails = Get-AzConsumptionUsageDetail -StartDate $StartDate -EndDate $EndDate
+# Azure Cost Management API endpoint
+cost_management_url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.CostManagement/query?api-version={api_version}"
 
-# Filter for Azure Databricks services
-$DatabricksUsage = $UsageDetails | Where-Object { $_.Product -like "*Databricks*" }
+# Define the time range for September 2024
+time_period = {
+    "type": "Custom",
+    "timeframe": "Custom",
+    "timePeriod": {
+        "from": "2024-09-01T00:00:00Z",
+        "to": "2024-09-30T23:59:59Z"
+    }
+}
 
-# Extract node type/worker type from MeterName or MeterSubCategory
-$DatabricksUsageWithNodeType = $DatabricksUsage | Select-Object `
-    @{Name="Date";Expression={$_.Date}},
-    @{Name="ResourceGroup";Expression={$_.ResourceGroupName}},
-    @{Name="ResourceId";Expression={$_.InstanceId}},
-    @{Name="Product";Expression={$_.Product}},
-    @{Name="MeterCategory";Expression={$_.MeterCategory}},
-    @{Name="MeterSubCategory";Expression={$_.MeterSubCategory}},
-    @{Name="MeterName";Expression={$_.MeterName}},
-    @{Name="ConsumedQuantity";Expression={$_.ConsumedQuantity}},
-    @{Name="Cost";Expression={$_.Cost}},
-    @{Name="Currency";Expression={$_.Currency}},
-    @{Name="NodeType";Expression={
-        # Try to extract node type from MeterName or MeterSubCategory
-        if ($_.MeterName -match "Standard_[A-Za-z0-9_]+") {
-            $Matches[0]
-        } elseif ($_.MeterSubCategory -match "Standard_[A-Za-z0-9_]+") {
-            $Matches[0]
-        } else {
-            "Unknown"
-        }
-    }}
+# Define the request body for cost data with necessary grouping
+request_body = {
+    "type": "Usage",
+    "dataSet": {
+        "granularity": "Daily",
+        "aggregation": {
+            "totalCost": {
+                "name": "PreTaxCost",
+                "function": "Sum"
+            }
+        },
+        "grouping": [
+            {
+                "type": "Dimension",
+                "name": "ResourceId"
+            },
+            {
+                "type": "Dimension",
+                "name": "ResourceType"
+            }
+        ]
+    },
+    "timeframe": "Custom",
+    "timePeriod": time_period
+}
 
-# Export the data to a CSV file
-$DatabricksUsageWithNodeType | Export-Csv -Path "DatabricksCost_Sep2024.csv" -NoTypeInformation
+# Retrieve cost data for the specified period
+response = requests.post(cost_management_url, headers=headers, json=request_body)
+cost_data = response.json()
 
-Write-Host "CSV file 'DatabricksCost_Sep2024.csv' has been created successfully."
+# Prepare to store data for CSV
+csv_data = [["ResourceId", "ResourceType", "NodeType", "Date", "Cost"]]
+
+# Fetch details for each Databricks cluster (for node types)
+for item in cost_data['data']['rows']:
+    resource_id = item[0]
+    resource_type = item[1]
+    cost_date = item[2]
+    total_cost = item[3]
+
+    # Fetch cluster details to get node types
+    cluster_id = resource_id.split('/')[-1]  # Modify based on the structure of ResourceId in your data
+    databricks_cluster_url = f"https://{host_name}/api/2.0/clusters/get?cluster_id={cluster_id}"
+    cluster_response = requests.get(databricks_cluster_url, headers=headers).json()
+
+    # Extract node type
+    node_type = cluster_response.get('node_type_id', 'Unknown')
+
+    # Append to CSV data
+    csv_data.append([resource_id, resource_type, node_type, cost_date, total_cost])
+
+# Write data to CSV file
+csv_file = "databricks_costs_september_2024.csv"
+with open(csv_file, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerows(csv_data)
+
+print(f"Data written to {csv_file}")
