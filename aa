@@ -1,6 +1,5 @@
 import requests
 import csv
-from datetime import datetime
 from azure.identity import DefaultAzureCredential
 
 # Set up authentication for Azure and Databricks
@@ -9,9 +8,6 @@ credential = DefaultAzureCredential()
 
 # Get Azure Management API token
 azure_management_token = credential.get_token("https://management.azure.com/.default").token
-
-# Get Databricks API token
-databricks_token = credential.get_token("https://databricks.azure.net/.default").token
 
 # Set up headers for Azure APIs
 azure_headers = {
@@ -59,7 +55,22 @@ request_body = {
 
 # Retrieve cost data for the specified period
 response = requests.post(cost_management_url, headers=azure_headers, json=request_body)
+if response.status_code != 200:
+    print(f"Failed to retrieve cost data: {response.status_code}")
+    print(response.json())
+    exit()
+
+# Attempt to parse the cost data
 cost_data = response.json()
+
+# Debugging: Print the structure if 'rows' not found
+if 'properties' not in cost_data or 'rows' not in cost_data['properties']:
+    print("Unexpected response structure:")
+    print(cost_data)
+    exit()
+
+# Access the correct path for rows
+rows = cost_data['properties']['rows']
 
 # Function to get workspace URL from resource ID
 def get_workspace_url(resource_id):
@@ -68,8 +79,7 @@ def get_workspace_url(resource_id):
     if response.status_code == 200:
         workspace_info = response.json()
         properties = workspace_info.get('properties', {})
-        workspace_url = properties.get('workspaceUrl', '')
-        return workspace_url
+        return properties.get('workspaceUrl', '')
     else:
         print(f"Failed to get workspace URL for {resource_id}")
         return None
@@ -78,18 +88,18 @@ def get_workspace_url(resource_id):
 csv_data = [["ResourceId", "Workspace Name", "Node Type", "Date", "Cost"]]
 
 # Loop through cost data and retrieve Databricks cluster information for node types
-for item in cost_data['properties']['rows']:
+for item in rows:
     resource_id = item[0]
     cost_date = item[1]
     total_cost = item[2]
 
     # Get the workspace URL
     workspace_url = get_workspace_url(resource_id)
-
     if not workspace_url:
         continue
 
     # Set up Databricks API headers for this workspace
+    databricks_token = credential.get_token("https://databricks.azure.net/.default").token
     databricks_headers = {
         'Authorization': f'Bearer {databricks_token}',
         'X-Databricks-Azure-Workspace-Resource-Id': resource_id
@@ -101,6 +111,7 @@ for item in cost_data['properties']['rows']:
     if clusters_response.status_code != 200:
         print(f"Failed to get clusters for workspace {workspace_url}")
         continue
+
     clusters_response_json = clusters_response.json()
 
     # Process each cluster and extract node type
