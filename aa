@@ -1,21 +1,27 @@
 import requests
 import csv
 from datetime import datetime
+from azure.identity import DefaultAzureCredential
 
-# Set up authentication details and endpoints
+# Set up authentication for Azure and Databricks
 subscription_id = "your_subscription_id"
-resource_group = "your_resource_group"
-host_token = "your_PAT_token"
-api_version = "2021-10-01"  # Or update to the latest version if needed
+credential = DefaultAzureCredential()
+access_token = credential.get_token("https://management.azure.com/.default").token
 
-# Set up headers for Databricks REST API
-headers = {
-    'Authorization': f'Bearer {host_token}',
+# Set up headers for Azure and Databricks APIs
+azure_headers = {
+    'Authorization': f'Bearer {access_token}',
     'Content-Type': 'application/json'
 }
 
+# Set up your Databricks PAT (Personal Access Token) 
+databricks_token = "your_databricks_token"
+databricks_headers = {
+    'Authorization': f'Bearer {databricks_token}'
+}
+
 # Azure Cost Management API endpoint
-cost_management_url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.CostManagement/query?api-version={api_version}"
+cost_management_url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.CostManagement/query?api-version=2021-10-01"
 
 # Define the time range for September 2024
 time_period = {
@@ -27,7 +33,7 @@ time_period = {
     }
 }
 
-# Define the request body for cost data with necessary grouping
+# Define the request body for cost data, filtering specifically for Databricks workspaces
 request_body = {
     "type": "Usage",
     "dataSet": {
@@ -42,41 +48,47 @@ request_body = {
             {
                 "type": "Dimension",
                 "name": "ResourceId"
-            },
-            {
-                "type": "Dimension",
-                "name": "ResourceType"
             }
-        ]
+        ],
+        "filter": {
+            "dimensions": {
+                "name": "ResourceType",
+                "operator": "In",
+                "values": ["Microsoft.Databricks/workspaces"]
+            }
+        }
     },
     "timeframe": "Custom",
     "timePeriod": time_period
 }
 
 # Retrieve cost data for the specified period
-response = requests.post(cost_management_url, headers=headers, json=request_body)
+response = requests.post(cost_management_url, headers=azure_headers, json=request_body)
 cost_data = response.json()
 
 # Prepare to store data for CSV
-csv_data = [["ResourceId", "ResourceType", "NodeType", "Date", "Cost"]]
+csv_data = [["ResourceId", "Workspace Name", "Node Type", "Date", "Cost"]]
 
-# Fetch details for each Databricks cluster (for node types)
+# Loop through cost data and retrieve Databricks cluster information for node types
 for item in cost_data['data']['rows']:
     resource_id = item[0]
-    resource_type = item[1]
-    cost_date = item[2]
-    total_cost = item[3]
+    cost_date = item[1]
+    total_cost = item[2]
 
-    # Fetch cluster details to get node types
-    cluster_id = resource_id.split('/')[-1]  # Modify based on the structure of ResourceId in your data
-    databricks_cluster_url = f"https://{host_name}/api/2.0/clusters/get?cluster_id={cluster_id}"
-    cluster_response = requests.get(databricks_cluster_url, headers=headers).json()
+    # Derive the workspace URL and call the Databricks API
+    workspace_name = resource_id.split('/')[-1]
+    host_name = f"{workspace_name}.azuredatabricks.net"
 
-    # Extract node type
-    node_type = cluster_response.get('node_type_id', 'Unknown')
+    # Retrieve cluster information for the workspace
+    clusters_url = f"https://{host_name}/api/2.0/clusters/list"
+    clusters_response = requests.get(clusters_url, headers=databricks_headers).json()
 
-    # Append to CSV data
-    csv_data.append([resource_id, resource_type, node_type, cost_date, total_cost])
+    # Process each cluster and extract node type
+    for cluster in clusters_response.get('clusters', []):
+        node_type = cluster.get('node_type_id', 'Unknown')
+
+        # Append to CSV data
+        csv_data.append([resource_id, workspace_name, node_type, cost_date, total_cost])
 
 # Write data to CSV file
 csv_file = "databricks_costs_september_2024.csv"
