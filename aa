@@ -1,131 +1,53 @@
 import requests
-import csv
-from azure.identity import DefaultAzureCredential
+import json
 
-# Set up authentication for Azure and Databricks
-subscription_id = "your_subscription_id"
-credential = DefaultAzureCredential()
+# Set the parameters
+apim_url = "apim_url"
+deployment_name = "deployment_name"
+api_version = "2024-02-15-preview"
+subscription_key = "subscription_key"
 
-# Get Azure Management API token
-azure_management_token = credential.get_token("https://management.azure.com/.default").token
-
-# Set up headers for Azure APIs
-azure_headers = {
-    'Authorization': f'Bearer {azure_management_token}',
-    'Content-Type': 'application/json'
+# Construct the URL and headers
+url = f"{apim_url}/deployments/{deployment_name}/chat/completions?api-version={api_version}"
+headers = {
+    "Content-Type": "application/json",
+    "Ocp-Apim-Subscription-Key": subscription_key
 }
 
-# Azure Cost Management API endpoint
-cost_management_url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.CostManagement/query?api-version=2021-10-01"
+# Read the input from a text file
+input_file = "input.txt"
+with open(input_file, 'r') as file:
+    file_content = file.read()
 
-# Define the time range for September 2024
-time_period = {
-    "from": "2024-09-01T00:00:00Z",
-    "to": "2024-09-30T23:59:59Z"
-}
+# Define additional instructions
+additional_instructions = "Please convert this code from Python to Java."
 
-# Define the request body for cost data, filtering specifically for Databricks workspaces
-request_body = {
-    "type": "Usage",
-    "timeframe": "Custom",
-    "timePeriod": time_period,
-    "dataset": {
-        "granularity": "Daily",
-        "aggregation": {
-            "totalCost": {
-                "name": "PreTaxCost",
-                "function": "Sum"
-            }
+# Combine additional instructions and file content
+user_input = f"{additional_instructions}\n\nCode:\n{file_content}"
+
+# Define the JSON payload with combined user input
+json_payload = {
+    "messages": [
+        {
+            "role": "system",
+            "content": "You are an AI assistant that helps with code conversion tasks."
         },
-        "grouping": [
-            {
-                "type": "Dimension",
-                "name": "ResourceId"
-            }
-        ],
-        "filter": {
-            "dimensions": {
-                "name": "ResourceType",
-                "operator": "In",
-                "values": ["Microsoft.Databricks/workspaces"]
-            }
+        {
+            "role": "user",
+            "content": user_input
         }
-    }
+    ],
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_tokens": 800
 }
 
-# Retrieve cost data for the specified period
-response = requests.post(cost_management_url, headers=azure_headers, json=request_body)
-if response.status_code != 200:
-    print(f"Failed to retrieve cost data: {response.status_code}")
-    print(response.json())
-    exit()
+# Make the POST request
+response = requests.post(url, headers=headers, json=json_payload)
 
-# Attempt to parse the cost data
-cost_data = response.json()
+# Write the response to an output text file
+output_file = "output.txt"
+with open(output_file, 'w') as file:
+    file.write(response.text)
 
-# Debugging: Print the structure if 'rows' not found
-if 'properties' not in cost_data or 'rows' not in cost_data['properties']:
-    print("Unexpected response structure:")
-    print(cost_data)
-    exit()
-
-# Access the correct path for rows
-rows = cost_data['properties']['rows']
-
-# Function to get workspace URL from resource ID
-def get_workspace_url(resource_id):
-    workspace_url = f"https://management.azure.com{resource_id}?api-version=2018-04-01"
-    response = requests.get(workspace_url, headers=azure_headers)
-    if response.status_code == 200:
-        workspace_info = response.json()
-        properties = workspace_info.get('properties', {})
-        return properties.get('workspaceUrl', '')
-    else:
-        print(f"Failed to get workspace URL for {resource_id}")
-        return None
-
-# Prepare to store data for CSV
-csv_data = [["ResourceId", "Workspace Name", "Node Type", "Date", "Cost"]]
-
-# Loop through cost data and retrieve Databricks cluster information for node types
-for item in rows:
-    resource_id = item[0]
-    cost_date = item[1]
-    total_cost = item[2]
-
-    # Get the workspace URL
-    workspace_url = get_workspace_url(resource_id)
-    if not workspace_url:
-        continue
-
-    # Set up Databricks API headers for this workspace
-    databricks_token = credential.get_token("https://databricks.azure.net/.default").token
-    databricks_headers = {
-        'Authorization': f'Bearer {databricks_token}',
-        'X-Databricks-Azure-Workspace-Resource-Id': resource_id
-    }
-
-    # Retrieve cluster information for the workspace
-    clusters_url = f"https://{workspace_url}/api/2.0/clusters/list"
-    clusters_response = requests.get(clusters_url, headers=databricks_headers)
-    if clusters_response.status_code != 200:
-        print(f"Failed to get clusters for workspace {workspace_url}")
-        continue
-
-    clusters_response_json = clusters_response.json()
-
-    # Process each cluster and extract node type
-    for cluster in clusters_response_json.get('clusters', []):
-        node_type = cluster.get('node_type_id', 'Unknown')
-        workspace_name = workspace_url.split('.')[0]  # Extract workspace name from URL
-
-        # Append to CSV data
-        csv_data.append([resource_id, workspace_name, node_type, cost_date, total_cost])
-
-# Write data to CSV file
-csv_file = "databricks_costs_september_2024.csv"
-with open(csv_file, mode='w', newline='') as file:
-    writer = csv.writer(file)
-    writer.writerows(csv_data)
-
-print(f"Data written to {csv_file}")
+print(f"Response written to {output_file}")
