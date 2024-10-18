@@ -45,9 +45,16 @@ json_payload = {
 # Make the POST request
 response = requests.post(url, headers=headers, json=json_payload)
 
-# Write the response to an output text file
+# Parse the response and extract only the relevant part (choices -> message -> content)
+response_data = response.json()
+if 'choices' in response_data and len(response_data['choices']) > 0:
+    relevant_output = response_data['choices'][0]['message']['content']
+else:
+    relevant_output = "No relevant output found."
+
+# Write the relevant output to an output text file
 output_file = "output.txt"
 with open(output_file, 'w') as file:
-    file.write(response.text)
+    file.write(relevant_output)
 
-print(f"Response written to {output_file}")
+print(f"Relevant output written to {output_file}")
