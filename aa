@@ -1,60 +1,15 @@
-import requests
-import json
+# Mount the Blob Storage container to DBFS
+storage_account_name = "your_storage_account_name"
+container_name = "your_container_name"
+sas_token = "your_sas_token"  # Or use secrets if you have them in Databricks
 
-# Set the parameters
-apim_url = "apim_url"
-deployment_name = "deployment_name"
-api_version = "2024-02-15-preview"
-subscription_key = "subscription_key"
+mount_point = f"/mnt/{container_name}"
 
-# Construct the URL and headers
-url = f"{apim_url}/deployments/{deployment_name}/chat/completions?api-version={api_version}"
-headers = {
-    "Content-Type": "application/json",
-    "Ocp-Apim-Subscription-Key": subscription_key
-}
+# Use dbutils to mount the Blob Storage
+dbutils.fs.mount(
+  source = f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net",
+  mount_point = mount_point,
+  extra_configs = {f"fs.azure.sas.{container_name}.{storage_account_name}.blob.core.windows.net": sas_token}
+)
 
-# Read the input from a text file
-input_file = "input.txt"
-with open(input_file, 'r') as file:
-    file_content = file.read()
-
-# Define additional instructions
-additional_instructions = "Please convert this code from Python to Java."
-
-# Combine additional instructions and file content
-user_input = f"{additional_instructions}\n\nCode:\n{file_content}"
-
-# Define the JSON payload with combined user input
-json_payload = {
-    "messages": [
-        {
-            "role": "system",
-            "content": "You are an AI assistant that helps with code conversion tasks."
-        },
-        {
-            "role": "user",
-            "content": user_input
-        }
-    ],
-    "temperature": 0.7,
-    "top_p": 0.95,
-    "max_tokens": 800
-}
-
-# Make the POST request
-response = requests.post(url, headers=headers, json=json_payload)
-
-# Parse the response and extract only the relevant part (choices -> message -> content)
-response_data = response.json()
-if 'choices' in response_data and len(response_data['choices']) > 0:
-    relevant_output = response_data['choices'][0]['message']['content']
-else:
-    relevant_output = "No relevant output found."
-
-# Write the relevant output to an output text file
-output_file = "output.txt"
-with open(output_file, 'w') as file:
-    file.write(relevant_output)
-
-print(f"Relevant output written to {output_file}")
+print(f"Mounted {container_name} at {mount_point}")
