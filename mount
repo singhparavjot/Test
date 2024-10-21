@@ -1,0 +1,15 @@
+# Mount the Blob Storage container to DBFS
+storage_account_name = "your_storage_account_name"
+container_name = "your_container_name"
+sas_token = "your_sas_token"  # Or use secrets if you have them in Databricks
+
+mount_point = f"/mnt/{container_name}"
+
+# Use dbutils to mount the Blob Storage
+dbutils.fs.mount(
+  source = f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net",
+  mount_point = mount_point,
+  extra_configs = {f"fs.azure.sas.{container_name}.{storage_account_name}.blob.core.windows.net": sas_token}
+)
+
+print(f"Mounted {container_name} at {mount_point}")
