@@ -1,15 +1,74 @@
-# Mount the Blob Storage container to DBFS
-storage_account_name = "your_storage_account_name"
-container_name = "your_container_name"
-sas_token = "your_sas_token"  # Or use secrets if you have them in Databricks
+import requests
+import json
 
-mount_point = f"/mnt/{container_name}"
+# Define the paths for input and output files in the mounted Blob Storage
+input_file_path = "/mnt/your_container_name/input.txt"  # Replace 'your_container_name' with the actual container name
+output_file_path = "/mnt/your_container_name/output.txt"
 
-# Use dbutils to mount the Blob Storage
-dbutils.fs.mount(
-  source = f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net",
-  mount_point = mount_point,
-  extra_configs = {f"fs.azure.sas.{container_name}.{storage_account_name}.blob.core.windows.net": sas_token}
-)
+# Step 1: Read the Input File from Blob Storage
+try:
+    input_file_content = dbutils.fs.head(input_file_path)
+    print("Input File Content:\n", input_file_content)
+except Exception as e:
+    print(f"Error reading input file: {e}")
 
-print(f"Mounted {container_name} at {mount_point}")
+# Step 2: Processing the Input with AI API (Azure API Management)
+# Define additional instructions
+additional_instructions = "Please convert this code from Python to Java."
+
+# Combine additional instructions with the input file content
+user_input = f"{additional_instructions}\n\nCode:\n{input_file_content}"
+
+# Set the parameters for the Azure API Management call
+apim_url = "your_apim_url"  # Replace with your APIM URL
+deployment_name = "your_deployment_name"  # Replace with your deployment name
+api_version = "2024-02-15-preview"  # API version
+subscription_key = "your_subscription_key"  # Replace with your APIM subscription key
+
+# Construct the URL and headers for the API request
+url = f"{apim_url}/deployments/{deployment_name}/chat/completions?api-version={api_version}"
+headers = {
+    "Content-Type": "application/json",
+    "Ocp-Apim-Subscription-Key": subscription_key
+}
+
+# Define the JSON payload for the API call
+json_payload = {
+    "messages": [
+        {
+            "role": "system",
+            "content": "You are an AI assistant that helps with code conversion tasks."
+        },
+        {
+            "role": "user",
+            "content": user_input
+        }
+    ],
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_tokens": 800
+}
+
+# Step 3: Make the POST request to the Azure API Management and get the AI response
+try:
+    response = requests.post(url, headers=headers, json=json_payload)
+    response_data = response.json()
+
+    # Extract the relevant content from the API response
+    if 'choices' in response_data and len(response_data['choices']) > 0:
+        relevant_output = response_data['choices'][0]['message']['content']
+    else:
+        relevant_output = "No relevant output found from the AI."
+
+    print("Processed Output from AI:\n", relevant_output)
+
+except Exception as e:
+    relevant_output = f"Error during API call: {e}"
+    print(relevant_output)
+
+# Step 4: Write the AI-generated output to the Output File in Blob Storage
+try:
+    dbutils.fs.put(output_file_path, relevant_output, overwrite=True)
+    print(f"Output written to {output_file_path}")
+except Exception as e:
+    print(f"Error writing to output file: {e}")
