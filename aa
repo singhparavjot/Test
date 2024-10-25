@@ -1,74 +1,35 @@
-import requests
-import json
+# General Azure Environment and Credentials (can be omitted if using Managed Identity)
+active_directory_authority_url: "https://login.microsoftonline.com/"
+resource_manager_url: "https://management.azure.com/"
+credentials:
+  subscription_id: <secret>     # Your Azure Subscription ID
+  client_id: <secret>           # Client ID for Service Principal (omit if using Managed Identity)
+  client_secret: <secret>       # Client Secret for Service Principal (omit if using Managed Identity)
+  tenant_id: <secret>           # Tenant ID for Service Principal (omit if using Managed Identity)
 
-# Define the paths for input and output files in the mounted Blob Storage
-input_file_path = "/mnt/your_container_name/input.txt"  # Replace 'your_container_name' with the actual container name
-output_file_path = "/mnt/your_container_name/output.txt"
+# Targets: Wildcard for all resources and metrics
+targets:
+  - resource: "*"               # Wildcard to capture all resources
+    metrics:
+    - name: "*"                 # Wildcard to capture all metrics for these resources
+    aggregations:
+    - Minimum                   # Choose aggregations if applicable
+    - Maximum
+    - Average
 
-# Step 1: Read the Input File from Blob Storage
-try:
-    input_file_content = dbutils.fs.head(input_file_path)
-    print("Input File Content:\n", input_file_content)
-except Exception as e:
-    print(f"Error reading input file: {e}")
+# Resource Groups: Wildcard for all resource groups and resources
+resource_groups:
+  - resource_group: "*"         # Wildcard to capture all resource groups
+    resource_types:
+    - "*"                       # Wildcard to capture all resource types within the resource group
+    metrics:
+    - name: "*"                 # Wildcard to capture all metrics for these resources
 
-# Step 2: Processing the Input with AI API (Azure API Management)
-# Define additional instructions
-additional_instructions = "Please convert this code from Python to Java."
-
-# Combine additional instructions with the input file content
-user_input = f"{additional_instructions}\n\nCode:\n{input_file_content}"
-
-# Set the parameters for the Azure API Management call
-apim_url = "your_apim_url"  # Replace with your APIM URL
-deployment_name = "your_deployment_name"  # Replace with your deployment name
-api_version = "2024-02-15-preview"  # API version
-subscription_key = "your_subscription_key"  # Replace with your APIM subscription key
-
-# Construct the URL and headers for the API request
-url = f"{apim_url}/deployments/{deployment_name}/chat/completions?api-version={api_version}"
-headers = {
-    "Content-Type": "application/json",
-    "Ocp-Apim-Subscription-Key": subscription_key
-}
-
-# Define the JSON payload for the API call
-json_payload = {
-    "messages": [
-        {
-            "role": "system",
-            "content": "You are an AI assistant that helps with code conversion tasks."
-        },
-        {
-            "role": "user",
-            "content": user_input
-        }
-    ],
-    "temperature": 0.7,
-    "top_p": 0.95,
-    "max_tokens": 800
-}
-
-# Step 3: Make the POST request to the Azure API Management and get the AI response
-try:
-    response = requests.post(url, headers=headers, json=json_payload)
-    response_data = response.json()
-
-    # Extract the relevant content from the API response
-    if 'choices' in response_data and len(response_data['choices']) > 0:
-        relevant_output = response_data['choices'][0]['message']['content']
-    else:
-        relevant_output = "No relevant output found from the AI."
-
-    print("Processed Output from AI:\n", relevant_output)
-
-except Exception as e:
-    relevant_output = f"Error during API call: {e}"
-    print(relevant_output)
-
-# Step 4: Write the AI-generated output to the Output File in Blob Storage
-try:
-    dbutils.fs.put(output_file_path, relevant_output, overwrite=True)
-    print(f"Output written to {output_file_path}")
-except Exception as e:
-    print(f"Error writing to output file: {e}")
+# Resource Tags: Capture all resources with specific tags and all metrics
+resource_tags:
+  - resource_tag_name: "*"      # Wildcard to capture all resources with any tag
+    resource_tag_value: "*"     # Wildcard for any value of the tag
+    resource_types:
+    - "*"                       # Wildcard to capture all resource types with these tags
+    metrics:
+    - name: "*"                 # Wildcard to capture all metrics for these resources
