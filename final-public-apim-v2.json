@@ -38,14 +38,14 @@
     },
     "apiServiceNamePrimary": {
       "type": "string",
-      "defaultValue": "parav-Insert_Your_Azure_OpenAi_Name_Here",
+      "defaultValue": "primary Open Ai Service name",
       "metadata": {
         "description": "Provide the Name of the Azure Open AI service."
       }
     },
     "apiServiceRgPrimary": {
       "type": "string",
-      "defaultValue": "Insert_Resource_Group_Name_Here",
+      "defaultValue": "primary open ai service rg name",
       "metadata": {
         "description": "Provide the Resource Group Name of the Azure Open AI service."
       }
@@ -63,14 +63,14 @@
     },
     "apiServiceNameSecondary": {
       "type": "string",
-      "defaultValue": "parav-Maybe-Insert_Your_Secondary_Azure_OpenAi_Name_Here",
+      "defaultValue": "secondary open ai service name",
       "metadata": {
         "description": "If you select Multi in azureOpenAiRegionType, then you must provide another Azure OpenAI Name here."
       }
     },
     "apiServiceRgSecondary": {
       "type": "string",
-      "defaultValue": "Maybe-Insert_Resource_Group_Name_Here",
+      "defaultValue": "secondary rg name",
       "metadata": {
         "description": "If you select Multi in azureOpenAiRegionType, provide the Resource Group Name of the Azure Open AI service."
       }
@@ -84,7 +84,7 @@
     },
     "resourceNamePrefix": {
       "type": "string",
-      "defaultValue": "parav-parav",
+      "defaultValue": "parav",
       "metadata": {
         "description": "Prefix for resource names."
       }
