@@ -2,7 +2,7 @@
 $subscriptionId = "<SubscriptionId>"
 $resourceGroupName = "<ResourceGroupName>"
 $openAIResourceName = "<OpenAIResourceName>"
-$deploymentName = "<DeploymentName>"  # Replace with your model deployment name, e.g., 'gpt-4o'
+$deploymentName = "<DeploymentName>"  # Set your model deployment name, e.g., 'gpt-4o'
 
 # Set the subscription context
 Set-AzContext -SubscriptionId $subscriptionId
@@ -14,19 +14,23 @@ $resourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/
 $startTime = (Get-Date).AddDays(-2)
 $endTime = Get-Date
 
-# Query the metric for Processed Inference Tokens over the last 2 days
+# Query the metric for Processed Inference Tokens over the last 2 days without filtering
 $metricData = Get-AzMetric -ResourceId $resourceId `
     -MetricName "ProcessedInferenceTokens" `
     -TimeGrain "1:00:00" `  # 1-hour granularity
     -AggregationType "Total" `
-    -Filter "ModelDeploymentName eq '$deploymentName'" `
     -StartTime $startTime `
     -EndTime $endTime
 
-# Sum up the tokens
+# Initialize total tokens
 $totalTokens = 0
+
+# Process metric data and filter by deployment name
 foreach ($metric in $metricData.Data) {
-    $totalTokens += $metric.Total
+    # Only sum tokens for the specified deployment name
+    if ($metric.Dimensions | Where-Object { $_.Name -eq "ModelDeploymentName" -and $_.Value -eq $deploymentName }) {
+        $totalTokens += $metric.Total
+    }
 }
 
 # Define cost per 1,000 tokens based on your model type
