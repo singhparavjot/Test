@@ -1,0 +1,74 @@
+import os
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.monitor import MonitorManagementClient
+from azure.ai.openai import OpenAIManagementClient
+
+def main():
+    # Replace these with your Azure details
+    subscription_id = 'your_subscription_id'
+    resource_group = 'your_resource_group'
+    openai_account_name = 'your_openai_account_name'
+    location = 'your_openai_resource_location'  # e.g., 'eastus'
+
+    # Authenticate with Azure
+    credential = DefaultAzureCredential()
+
+    # Initialize clients
+    monitor_client = MonitorManagementClient(credential, subscription_id)
+    openai_client = OpenAIManagementClient(credential, subscription_id)
+
+    # Get the OpenAI resource
+    openai_resource = openai_client.accounts.get(
+        resource_group_name=resource_group,
+        account_name=openai_account_name
+    )
+
+    # Construct the resource ID
+    resource_id = openai_resource.id
+
+    # Retrieve the list of deployments (models)
+    deployments = openai_client.deployments.list(
+        resource_group_name=resource_group,
+        account_name=openai_account_name
+    )
+
+    print(f"OpenAI Resource: {openai_account_name}")
+    print(f"{'Model':<30} {'Total Tokens':<15} {'Cost (USD)':<10}")
+
+    for deployment in deployments:
+        deployment_name = deployment.name
+
+        # Query metrics for the deployment
+        metrics_data = monitor_client.metrics.list(
+            resource_id,
+            timespan="P1D",  # Adjust as needed (e.g., "2023-10-01T00:00:00Z/2023-10-31T23:59:59Z")
+            interval=None,
+            metricnames="TotalTokens",
+            aggregation="Total",
+            filter=f"Deployment eq '{deployment_name}'"
+        )
+
+        total_tokens = 0
+        for item in metrics_data.value:
+            for timeseries in item.timeseries:
+                for data in timeseries.data:
+                    if data.total:
+                        total_tokens += data.total
+
+        # Define the cost per 1000 tokens based on the model
+        # Update the prices based on the Azure pricing calculator
+        if 'gpt-4' in deployment.model.lower():
+            cost_per_1000_tokens = 0.06  # Example price for GPT-4
+        elif 'gpt-35-turbo' in deployment.model.lower():
+            cost_per_1000_tokens = 0.02  # Example price for GPT-3.5 Turbo
+        else:
+            cost_per_1000_tokens = 0.01  # Default price for other models
+
+        # Calculate the cost
+        cost = (total_tokens / 1000) * cost_per_1000_tokens
+
+        # Display the results
+        print(f"{deployment_name:<30} {total_tokens:<15} ${cost:<10.4f}")
+
+if __name__ == "__main__":
+    main()
