@@ -2,8 +2,7 @@
 $subscriptionId = "<SubscriptionId>"
 $resourceGroupName = "<ResourceGroupName>"
 $openAIResourceName = "<OpenAIResourceName>"
-$deploymentName = "<DeploymentName>" # Specific model deployment, e.g., 'gpt-4o'
-$timespan = "2023-10-01T00:00:00Z/2023-10-02T00:00:00Z" # Adjust as needed
+$deploymentName = "<DeploymentName>"  # Replace with your model deployment name, e.g., 'gpt-4o'
 
 # Set the subscription context
 Set-AzContext -SubscriptionId $subscriptionId
@@ -11,14 +10,18 @@ Set-AzContext -SubscriptionId $subscriptionId
 # Define the resource ID for the Azure OpenAI resource
 $resourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.CognitiveServices/accounts/$openAIResourceName"
 
-# Query the metric for Processed Inference Tokens
+# Define start and end times for the last 2 days
+$startTime = (Get-Date).AddDays(-2)
+$endTime = Get-Date
+
+# Query the metric for Processed Inference Tokens over the last 2 days
 $metricData = Get-AzMetric -ResourceId $resourceId `
     -MetricName "ProcessedInferenceTokens" `
-    -TimeGrain "PT1H" `
+    -TimeGrain "1:00:00" `  # 1-hour granularity
     -AggregationType "Total" `
     -Filter "ModelDeploymentName eq '$deploymentName'" `
-    -StartTime (Get-Date).AddDays(-1) `
-    -EndTime (Get-Date)
+    -StartTime $startTime `
+    -EndTime $endTime
 
 # Sum up the tokens
 $totalTokens = 0
@@ -34,5 +37,5 @@ $cost = ($totalTokens / 1000) * $costPer1000Tokens
 
 # Display the results
 Write-Output "Deployment: $deploymentName"
-Write-Output "Total Processed Tokens: $totalTokens"
+Write-Output "Total Processed Tokens (last 2 days): $totalTokens"
 Write-Output "Estimated Cost: $($cost.ToString("F4")) USD"
