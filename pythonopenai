@@ -1,45 +1,15 @@
-# Set variables
-$subscriptionId = "<SubscriptionId>"
-$resourceGroupName = "<ResourceGroupName>"
-$openAIResourceName = "<OpenAIResourceName>"
-$deploymentName = "<DeploymentName>"  # Set your model deployment name, e.g., 'gpt-4o'
+$subscriptionId = "<subscription_id>"
+$resourceGroup = "<resource_group_name>"
+$openAIAccountName = "<openai_resource_name>"
+$startTime = "<start_time>"
+$endTime = "<end_time>"
 
-# Set the subscription context
-Set-AzContext -SubscriptionId $subscriptionId
-
-# Define the resource ID for the Azure OpenAI resource
-$resourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.CognitiveServices/accounts/$openAIResourceName"
-
-# Define start and end times for the last 2 days
-$startTime = (Get-Date).AddDays(-2)
-$endTime = Get-Date
-
-# Query the metric for Processed Inference Tokens over the last 2 days without filtering
-$metricData = Get-AzMetric -ResourceId $resourceId `
-    -MetricName "ProcessedInferenceTokens" `
-    -TimeGrain "1:00:00" `  # 1-hour granularity
-    -AggregationType "Total" `
-    -StartTime $startTime `
-    -EndTime $endTime
-
-# Initialize total tokens
-$totalTokens = 0
-
-# Process metric data and filter by deployment name
-foreach ($metric in $metricData.Data) {
-    # Only sum tokens for the specified deployment name
-    if ($metric.Dimensions | Where-Object { $_.Name -eq "ModelDeploymentName" -and $_.Value -eq $deploymentName }) {
-        $totalTokens += $metric.Total
-    }
+$metricParams = @{
+    ResourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.CognitiveServices/accounts/$openAIAccountName"
+    MetricName = "ProcessedInferenceTokens"
+    AggregationTypeName = "Total"
+    StartTime = $startTime
+    EndTime = $endTime
 }
 
-# Define cost per 1,000 tokens based on your model type
-$costPer1000Tokens = 0.06 # Example for GPT-4 8K context, adjust based on your model
-
-# Calculate total cost
-$cost = ($totalTokens / 1000) * $costPer1000Tokens
-
-# Display the results
-Write-Output "Deployment: $deploymentName"
-Write-Output "Total Processed Tokens (last 2 days): $totalTokens"
-Write-Output "Estimated Cost: $($cost.ToString("F4")) USD"
+(Get-AzMetric @metricParams).Data
