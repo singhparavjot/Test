@@ -1,46 +1,38 @@
-import os
-from datetime import datetime, timedelta
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.monitor import MonitorManagementClient
+# Set variables
+$subscriptionId = "<SubscriptionId>"
+$resourceGroupName = "<ResourceGroupName>"
+$openAIResourceName = "<OpenAIResourceName>"
+$deploymentName = "<DeploymentName>" # Specific model deployment, e.g., 'gpt-4o'
+$timespan = "2023-10-01T00:00:00Z/2023-10-02T00:00:00Z" # Adjust as needed
 
-# Replace with your Azure details
-subscription_id = 'your_subscription_id'
-resource_group = 'your_resource_group'
-openai_account_name = 'your_openai_account_name'
-deployment_name = 'gpt-4o'  # Replace with your model deployment name
+# Set the subscription context
+Set-AzContext -SubscriptionId $subscriptionId
 
-# Initialize Azure Monitor client
-credential = DefaultAzureCredential()
-monitor_client = MonitorManagementClient(credential, subscription_id)
+# Define the resource ID for the Azure OpenAI resource
+$resourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.CognitiveServices/accounts/$openAIResourceName"
 
-# Construct the resource ID for Azure OpenAI
-resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.CognitiveServices/accounts/{openai_account_name}"
+# Query the metric for Processed Inference Tokens
+$metricData = Get-AzMetric -ResourceId $resourceId `
+    -MetricName "ProcessedInferenceTokens" `
+    -TimeGrain "PT1H" `
+    -AggregationType "Total" `
+    -Filter "ModelDeploymentName eq '$deploymentName'" `
+    -StartTime (Get-Date).AddDays(-1) `
+    -EndTime (Get-Date)
 
-# Define the timespan for usage data (e.g., last day)
-timespan = f"{(datetime.utcnow() - timedelta(days=1)).isoformat()}/{datetime.utcnow().isoformat()}"
+# Sum up the tokens
+$totalTokens = 0
+foreach ($metric in $metricData.Data) {
+    $totalTokens += $metric.Total
+}
 
-# Query Processed Inference Tokens with Sum aggregation
-metrics_data = monitor_client.metrics.list(
-    resource_id,
-    timespan=timespan,
-    interval=None,
-    metricnames="ProcessedInferenceTokens",
-    aggregation="Sum",
-    filter=f"ModelDeploymentName eq '{deployment_name}'"
-)
+# Define cost per 1,000 tokens based on your model type
+$costPer1000Tokens = 0.06 # Example for GPT-4 8K context, adjust based on your model
 
-# Process and calculate the cost
-total_tokens = sum(
-    data.total for metric in metrics_data.value
-    for timeseries in metric.timeseries
-    for data in timeseries.data if data.total
-)
-
-# Define the cost per 1,000 tokens based on model type
-cost_per_1000_tokens = 0.06  # Adjust based on Azure's pricing for GPT-4 or other models
-cost = (total_tokens / 1000) * cost_per_1000_tokens
+# Calculate total cost
+$cost = ($totalTokens / 1000) * $costPer1000Tokens
 
 # Display the results
-print(f"Deployment: {deployment_name}")
-print(f"Total Processed Tokens: {total_tokens}")
-print(f"Estimated Cost: ${cost:.4f}")
+Write-Output "Deployment: $deploymentName"
+Write-Output "Total Processed Tokens: $totalTokens"
+Write-Output "Estimated Cost: $($cost.ToString("F4")) USD"
