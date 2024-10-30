@@ -3,59 +3,44 @@ from datetime import datetime, timedelta
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.monitor import MonitorManagementClient
 
-def get_usage_and_cost(subscription_id, resource_group, openai_account_name):
-    # Initialize Azure Monitor client
-    credential = DefaultAzureCredential()
-    monitor_client = MonitorManagementClient(credential, subscription_id)
+# Replace with your Azure details
+subscription_id = 'your_subscription_id'
+resource_group = 'your_resource_group'
+openai_account_name = 'your_openai_account_name'
+deployment_name = 'gpt-4o'  # Replace with your model deployment name
 
-    # Construct the resource ID for the Azure OpenAI resource
-    resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.CognitiveServices/accounts/{openai_account_name}"
+# Initialize Azure Monitor client
+credential = DefaultAzureCredential()
+monitor_client = MonitorManagementClient(credential, subscription_id)
 
-    print(f"OpenAI Resource: {openai_account_name}")
-    print(f"{'Deployment Name':<30} {'Input Tokens':<15} {'Output Tokens':<15} {'Total Cost (USD)':<10}")
+# Construct the resource ID for Azure OpenAI
+resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}/providers/Microsoft.CognitiveServices/accounts/{openai_account_name}"
 
-    # Define timeframe for usage data (e.g., past day)
-    timespan = f"{(datetime.utcnow() - timedelta(days=1)).isoformat()}/{datetime.utcnow().isoformat()}"
+# Define the timespan for usage data (e.g., last day)
+timespan = f"{(datetime.utcnow() - timedelta(days=1)).isoformat()}/{datetime.utcnow().isoformat()}"
 
-    # Query input (Processed Prompt Tokens) and output (Generated Completion Tokens) separately
-    metrics = ["ProcessedPromptTokens", "GeneratedCompletionTokens"]
-    aggregation = "Sum"
+# Query Processed Inference Tokens with Sum aggregation
+metrics_data = monitor_client.metrics.list(
+    resource_id,
+    timespan=timespan,
+    interval=None,
+    metricnames="ProcessedInferenceTokens",
+    aggregation="Sum",
+    filter=f"ModelDeploymentName eq '{deployment_name}'"
+)
 
-    for metric_name in metrics:
-        metrics_data = monitor_client.metrics.list(
-            resource_id,
-            timespan=timespan,
-            interval=None,
-            metricnames=metric_name,
-            aggregation=aggregation
-        )
+# Process and calculate the cost
+total_tokens = sum(
+    data.total for metric in metrics_data.value
+    for timeseries in metric.timeseries
+    for data in timeseries.data if data.total
+)
 
-        for metric in metrics_data.value:
-            deployment_name = metric.name.value
-            total_tokens = sum(
-                data.total for timeseries in metric.timeseries for data in timeseries.data if data.total
-            )
+# Define the cost per 1,000 tokens based on model type
+cost_per_1000_tokens = 0.06  # Adjust based on Azure's pricing for GPT-4 or other models
+cost = (total_tokens / 1000) * cost_per_1000_tokens
 
-            # Define costs per 1,000 tokens
-            if 'gpt-4' in deployment_name.lower():
-                cost_per_1000_tokens = 0.06  # Example price for GPT-4 8K context
-            elif 'gpt-4-32k' in deployment_name.lower():
-                cost_per_1000_tokens = 0.12  # Example price for GPT-4 32K context
-            elif 'gpt-35-turbo' in deployment_name.lower():
-                cost_per_1000_tokens = 0.02  # Example price for GPT-3.5 Turbo
-            else:
-                cost_per_1000_tokens = 0.01  # Default price for other models
-
-            # Calculate the cost
-            cost = (total_tokens / 1000) * cost_per_1000_tokens
-            token_type = "Input Tokens" if metric_name == "ProcessedPromptTokens" else "Output Tokens"
-
-            # Display the results
-            print(f"{deployment_name:<30} {token_type:<15} {total_tokens:<15} ${cost:<10.4f}")
-
-if __name__ == "__main__":
-    # Replace these values with your Azure details
-    subscription_id = 'your_subscription_id'
-    resource_group = 'your_resource_group'
-    openai_account_name = 'your_openai_account_name'
-    get_usage_and_cost(subscription_id, resource_group, openai_account_name)
+# Display the results
+print(f"Deployment: {deployment_name}")
+print(f"Total Processed Tokens: {total_tokens}")
+print(f"Estimated Cost: ${cost:.4f}")
