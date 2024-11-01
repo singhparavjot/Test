@@ -1,15 +1,15 @@
-$subscriptionId = "<subscription_id>"
-$resourceGroup = "<resource_group_name>"
-$openAIAccountName = "<openai_resource_name>"
-$startTime = "<start_time>"
-$endTime = "<end_time>"
-
-$metricParams = @{
-    ResourceId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.CognitiveServices/accounts/$openAIAccountName"
-    MetricName = "ProcessedInferenceTokens"
-    AggregationTypeName = "Total"
-    StartTime = $startTime
-    EndTime = $endTime
+# Process metric data and filter by deployment name
+foreach ($metric in $metricData.Data) {
+    # Check if the metric has dimensions and match the deployment name
+    foreach ($timeseries in $metric.Timeseries) {
+        foreach ($dimension in $timeseries.Metadatavalues) {
+            if ($dimension.Name -eq "ModelDeploymentName" -and $dimension.Value -eq $deploymentName) {
+                foreach ($data in $timeseries.Data) {
+                    if ($data.Total -ne $null) {
+                        $totalTokens += $data.Total
+                    }
+                }
+            }
+        }
+    }
 }
-
-(Get-AzMetric @metricParams).Data
