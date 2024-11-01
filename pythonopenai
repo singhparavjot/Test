@@ -1,22 +1,6 @@
-# Process metric data, simplifying the loop logic
-foreach ($metric in $metricData.Data) {
-    foreach ($timeseries in $metric.Timeseries) {
-        # Check if the deployment name matches in the metadata values
-        $isMatchingDeployment = $false
-        foreach ($dimension in $timeseries.Metadatavalues) {
-            if ($dimension.Name -eq "ModelDeploymentName" -and $dimension.Value -eq $deploymentName) {
-                $isMatchingDeployment = $true
-                break
-            }
-        }
-
-        # If we have a matching deployment, sum the Total values
-        if ($isMatchingDeployment) {
-            foreach ($data in $timeseries.Data) {
-                if ($data.Total -ne $null) {
-                    $totalTokens += $data.Total
-                }
-            }
-        }
-    }
+# Calculate and display the cost for each day's total tokens
+foreach ($data in $metricData.Data[0].Timeseries[0].Data) {
+    $dailyTokens = $data.Total
+    $dailyCost = ($dailyTokens / 1000) * $costPer1000Tokens
+    Write-Output "Date: $($data.TimeStamp.ToString("yyyy-MM-dd")), Cost: $($dailyCost.ToString("F4")) USD"
 }
