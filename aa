@@ -1,1 +1,1 @@
-$user_prefix = (Get-Content -Path "path\to\tfvars\file" | Select-String -Pattern 'user_prefix' | ForEach-Object { ($_ -split '=')[1].Trim(' "', ' ') })
+user_prefix=$(grep 'user_prefix' abc.tfvars | sed -E 's/.*"value": *"([^"]+)".*/\1/')
