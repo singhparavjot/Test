@@ -1,1 +1,1 @@
-user_prefix=$(awk -F= '/user_prefix/ {gsub(/[ "]/, "", $2); print $2}' path/to/tfvars/file)
+$user_prefix = (Get-Content -Path "path\to\tfvars\file" | Select-String -Pattern 'user_prefix' | ForEach-Object { ($_ -split '=')[1].Trim(' "', ' ') })
