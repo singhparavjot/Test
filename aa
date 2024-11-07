@@ -1,1 +1,33 @@
-user_prefix=$(grep 'user_prefix' abc.tfvars | sed -E 's/.*"value": *"([^"]+)".*/\1/')
+from flask import Flask
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+import os
+
+app = Flask(__name__)
+
+# Replace this with your Key Vault URL, or set it as an environment variable
+KEY_VAULT_URL = os.environ.get('KEY_VAULT_URL')  # e.g., "https://your-key-vault-name.vault.azure.net/"
+
+@app.route('/')
+def get_secret():
+    try:
+        # Use DefaultAzureCredential to authenticate using Managed Identity
+        credential = DefaultAzureCredential()
+
+        # Create a SecretClient to access the Key Vault
+        client = SecretClient(vault_url=KEY_VAULT_URL, credential=credential)
+
+        # Name of the secret you want to retrieve
+        secret_name = 'testsecret'
+
+        # Retrieve the secret from the Key Vault
+        secret = client.get_secret(secret_name)
+
+        # Display the secret value
+        return f"The secret value is: {secret.value}"
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
+
+if __name__ == '__main__':
+    # Run the Flask app
+    app.run(debug=True)
