@@ -1,33 +1,47 @@
-from flask import Flask
+import pyodbc
 from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
-import os
 
-app = Flask(__name__)
+# Define SQL Server and database details
+SQL_SERVER_NAME = 'your-sql-server-name.database.windows.net'
+DATABASE_NAME = 'your-database-name'
 
-# Replace this with your Key Vault URL, or set it as an environment variable
-KEY_VAULT_URL = os.environ.get('KEY_VAULT_URL')  # e.g., "https://your-key-vault-name.vault.azure.net/"
+# Create an Azure Managed Identity credential
+credential = DefaultAzureCredential()
 
-@app.route('/')
-def get_secret():
-    try:
-        # Use DefaultAzureCredential to authenticate using Managed Identity
-        credential = DefaultAzureCredential()
+# Define a function to get the token for the SQL database
+def get_token():
+    token = credential.get_token("https://database.windows.net/.default")
+    return token.token
 
-        # Create a SecretClient to access the Key Vault
-        client = SecretClient(vault_url=KEY_VAULT_URL, credential=credential)
+# Define the connection string, specifying ODBC Driver 17 for SQL Server
+connection_string = f"DRIVER={{ODBC Driver 17 for SQL Server}};" \
+                    f"SERVER={SQL_SERVER_NAME};" \
+                    f"DATABASE={DATABASE_NAME};" \
+                    f"Encrypt=yes;" \
+                    f"TrustServerCertificate=no;"
 
-        # Name of the secret you want to retrieve
-        secret_name = 'testsecret'
+# Establish connection using pyodbc and the access token
+try:
+    # Get an access token
+    token = get_token()
 
-        # Retrieve the secret from the Key Vault
-        secret = client.get_secret(secret_name)
+    # Open connection using the token
+    conn = pyodbc.connect(connection_string, attrs_before={1256: token})
 
-        # Display the secret value
-        return f"The secret value is: {secret.value}"
-    except Exception as e:
-        return f"An error occurred: {str(e)}"
+    # Run a sample query
+    cursor = conn.cursor()
+    cursor.execute("SELECT TOP 10 * FROM some_table")
+    
+    # Print results
+    for row in cursor.fetchall():
+        print(row)
 
-if __name__ == '__main__':
-    # Run the Flask app
-    app.run(debug=True)
+    print("Access succeeded.")
+
+except Exception as e:
+    print(f"Access failed: {str(e)}")
+
+finally:
+    # Close connection if open
+    if 'conn' in locals():
+        conn.close()
