@@ -1,48 +1,50 @@
-from flask import Flask, jsonify
-from azure.identity import DefaultAzureCredential
+from flask import Flask
 import pyodbc
+from azure.identity import DefaultAzureCredential
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
-# Define SQL Server and database details
+# SQL Server and database details
 SQL_SERVER_NAME = 'your-sql-server-name.database.windows.net'
 DATABASE_NAME = 'your-database-name'
 
-# Create an Azure Managed Identity credential
+# Initialize DefaultAzureCredential for managed identity
 credential = DefaultAzureCredential()
 
-# Define a function to get the token for the SQL database
+# Function to get the access token
 def get_token():
     token = credential.get_token("https://database.windows.net/.default")
     return token.token
 
-# Define the connection string, specifying ODBC Driver 17 for SQL Server
+# Connection string without username and password
 connection_string = f"DRIVER={{ODBC Driver 17 for SQL Server}};" \
                     f"SERVER={SQL_SERVER_NAME};" \
                     f"DATABASE={DATABASE_NAME};" \
                     f"Encrypt=yes;" \
                     f"TrustServerCertificate=no;"
 
-@app.route('/')  # Define the route for the root URL
-def get_data():
+@app.route('/')
+def test_db_connection():
     try:
-        # Get an access token
+        # Get access token for managed identity
         token = get_token()
 
-        # Open connection using the token
+        # Establish connection using the token
         conn = pyodbc.connect(connection_string, attrs_before={1256: token})
 
-        # Run a sample query
+        # Execute a simple query to confirm connection
         cursor = conn.cursor()
-        cursor.execute("SELECT TOP 10 * FROM your_table_name")  # Replace 'your_table_name' with your actual table name
-        
-        # Fetch and format the results
-        results = [dict(zip([column[0] for column in cursor.description], row)) for row in cursor.fetchall()]
-        
-        return jsonify(results)
+        cursor.execute("SELECT 1")
+
+        return "Database connection successful using managed identity!"
 
     except Exception as e:
-        return f"Access failed: {str(e)}", 500
+        logging.error(f"Error: {str(e)}")
+        return "An error occurred. Check the logs for details.", 500
 
     finally:
         # Close connection if open
