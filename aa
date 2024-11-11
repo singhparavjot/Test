@@ -1,5 +1,8 @@
-import pyodbc
+from flask import Flask, jsonify
 from azure.identity import DefaultAzureCredential
+import pyodbc
+
+app = Flask(__name__)
 
 # Define SQL Server and database details
 SQL_SERVER_NAME = 'your-sql-server-name.database.windows.net'
@@ -20,28 +23,31 @@ connection_string = f"DRIVER={{ODBC Driver 17 for SQL Server}};" \
                     f"Encrypt=yes;" \
                     f"TrustServerCertificate=no;"
 
-# Establish connection using pyodbc and the access token
-try:
-    # Get an access token
-    token = get_token()
+@app.route('/')  # Define the route for the root URL
+def get_data():
+    try:
+        # Get an access token
+        token = get_token()
 
-    # Open connection using the token
-    conn = pyodbc.connect(connection_string, attrs_before={1256: token})
+        # Open connection using the token
+        conn = pyodbc.connect(connection_string, attrs_before={1256: token})
 
-    # Run a sample query
-    cursor = conn.cursor()
-    cursor.execute("SELECT TOP 10 * FROM some_table")
-    
-    # Print results
-    for row in cursor.fetchall():
-        print(row)
+        # Run a sample query
+        cursor = conn.cursor()
+        cursor.execute("SELECT TOP 10 * FROM your_table_name")  # Replace 'your_table_name' with your actual table name
+        
+        # Fetch and format the results
+        results = [dict(zip([column[0] for column in cursor.description], row)) for row in cursor.fetchall()]
+        
+        return jsonify(results)
 
-    print("Access succeeded.")
+    except Exception as e:
+        return f"Access failed: {str(e)}", 500
 
-except Exception as e:
-    print(f"Access failed: {str(e)}")
+    finally:
+        # Close connection if open
+        if 'conn' in locals():
+            conn.close()
 
-finally:
-    # Close connection if open
-    if 'conn' in locals():
-        conn.close()
+if __name__ == '__main__':
+    app.run(debug=True)
