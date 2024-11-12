@@ -1,6 +1,6 @@
-from flask import Flask
-import pyodbc
+from flask import Flask, jsonify
 from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
 import logging
 
 # Set up logging
@@ -8,48 +8,31 @@ logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
-# SQL Server and database details
-SQL_SERVER_NAME = 'your-sql-server-name.database.windows.net'
-DATABASE_NAME = 'your-database-name'
+# Define the Storage Account details
+STORAGE_ACCOUNT_URL = "https://your-storage-account-name.blob.core.windows.net"
+CONTAINER_NAME = "your-container-name"  # Replace with the name of your container
 
-# Initialize DefaultAzureCredential for managed identity
+# Set up the DefaultAzureCredential to use Managed Identity
 credential = DefaultAzureCredential()
 
-# Function to get the access token
-def get_token():
-    token = credential.get_token("https://database.windows.net/.default")
-    return token.token
-
-# Connection string without username and password
-connection_string = f"DRIVER={{ODBC Driver 17 for SQL Server}};" \
-                    f"SERVER={SQL_SERVER_NAME};" \
-                    f"DATABASE={DATABASE_NAME};" \
-                    f"Encrypt=yes;" \
-                    f"TrustServerCertificate=no;"
+# Initialize BlobServiceClient with managed identity credential
+blob_service_client = BlobServiceClient(account_url=STORAGE_ACCOUNT_URL, credential=credential)
 
 @app.route('/')
-def test_db_connection():
+def list_blobs():
     try:
-        # Get access token for managed identity
-        token = get_token()
+        # Access the specified container
+        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+        
+        # List blobs in the container
+        blobs = container_client.list_blobs()
+        blob_names = [blob.name for blob in blobs]  # Collect blob names
 
-        # Establish connection using the token
-        conn = pyodbc.connect(connection_string, attrs_before={1256: token})
-
-        # Execute a simple query to confirm connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-
-        return "Database connection successful using managed identity!"
+        return jsonify(blob_names)  # Return the list of blob names as JSON
 
     except Exception as e:
         logging.error(f"Error: {str(e)}")
         return "An error occurred. Check the logs for details.", 500
-
-    finally:
-        # Close connection if open
-        if 'conn' in locals():
-            conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True)
