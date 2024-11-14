@@ -1,38 +1,84 @@
-from flask import Flask, jsonify
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
-import logging
+trigger:
+  branches:
+    include:
+      - main
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+pool:
+  vmImage: 'windows-latest'
 
-app = Flask(__name__)
+parameters:
+  - name: deployOption
+    displayName: "Select Deployment Option"
+    type: string
+    default: 'All'
+    values:
+      - All
+      - ADF
+      - Databricks
+      - SQL
+      - LogicApp
 
-# Define the Storage Account details
-STORAGE_ACCOUNT_URL = "https://your-storage-account-name.blob.core.windows.net"
-CONTAINER_NAME = "your-container-name"  # Replace with the name of your container
+variables:
+  azureSubscription: '<Your-Azure-Subscription-Name>'
+  resourceGroup: '<Your-Resource-Group>'
+  adfName: '<Your-Data-Factory-Name>'
+  databricksWorkspace: '<Your-Databricks-Workspace>'
+  sqlServerName: '<Your-SQL-Server-Name>'
+  logicAppName: '<Your-Logic-App-Name>'
 
-# Set up the DefaultAzureCredential to use Managed Identity
-credential = DefaultAzureCredential()
+stages:
+  - stage: Deploy
+    jobs:
+      - job: DeployADF
+        displayName: "Deploy to Azure Data Factory"
+        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'ADF'))
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '6.x'
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az datafactory pipeline create --factory-name $(adfName) --resource-group $(resourceGroup) --name 'pipeline_name' --pipeline @path/to/your/adf_pipeline.json
 
-# Initialize BlobServiceClient with managed identity credential
-blob_service_client = BlobServiceClient(account_url=STORAGE_ACCOUNT_URL, credential=credential)
+      - job: DeployDatabricks
+        displayName: "Deploy to Azure Databricks"
+        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'Databricks'))
+        steps:
+          - task: DatabricksDeployNotebookTask@0
+            inputs:
+              azureSubscription: $(azureSubscription)
+              databricksInstance: $(databricksWorkspace)
+              sourcePath: 'path/to/your/notebook/file.py'
+              destinationPath: '/Shared/your-notebook-path'
 
-@app.route('/')
-def list_blobs():
-    try:
-        # Access the specified container
-        container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-        
-        # List blobs in the container
-        blobs = container_client.list_blobs()
-        blob_names = [blob.name for blob in blobs]  # Collect blob names
+      - job: DeploySQL
+        displayName: "Deploy to Azure SQL Database"
+        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'SQL'))
+        steps:
+          - task: SqlAzureDacpacDeployment@1
+            inputs:
+              azureSubscription: $(azureSubscription)
+              ServerName: $(sqlServerName)
+              DatabaseName: '<Your-Database-Name>'
+              SqlUsername: '<Your-SQL-Admin-Username>'
+              SqlPassword: '<Your-SQL-Admin-Password>'
+              DacpacFile: 'path/to/your/database.dacpac'
+              DeployOptions: '/Action:Publish'
 
-        return jsonify(blob_names)  # Return the list of blob names as JSON
-
-    except Exception as e:
-        logging.error(f"Error: {str(e)}")
-        return "An error occurred. Check the logs for details.", 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
+      - job: DeployLogicApp
+        displayName: "Deploy to Azure Logic App"
+        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'LogicApp'))
+        steps:
+          - task: AzureResourceManagerTemplateDeployment@3
+            inputs:
+              azureSubscription: $(azureSubscription)
+              resourceGroupName: $(resourceGroup)
+              location: '<Your-Region>'
+              templateLocation: 'Linked artifact'
+              csmFile: 'path/to/your/logicapp-template.json'
+              csmParametersFile: 'path/to/your/logicapp-parameters.json'
