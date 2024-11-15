@@ -1,84 +1,29 @@
-trigger:
-  branches:
-    include:
-      - main
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import os
 
-pool:
-  vmImage: 'windows-latest'
+class APIHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/fruits':
+            # Send a 200 OK response
+            self.send_response(200)
+            # Set the content type to JSON
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            # Data to return
+            fruits = ["apple", "banana", "mango"]
+            # Write JSON data to the response
+            self.wfile.write(json.dumps(fruits).encode())
+        else:
+            # Send a 404 Not Found response if the path is incorrect
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b'{"error": "Not found"}')
 
-parameters:
-  - name: deployOption
-    displayName: "Select Deployment Option"
-    type: string
-    default: 'All'
-    values:
-      - All
-      - ADF
-      - Databricks
-      - SQL
-      - LogicApp
-
-variables:
-  azureSubscription: '<Your-Azure-Subscription-Name>'
-  resourceGroup: '<Your-Resource-Group>'
-  adfName: '<Your-Data-Factory-Name>'
-  databricksWorkspace: '<Your-Databricks-Workspace>'
-  sqlServerName: '<Your-SQL-Server-Name>'
-  logicAppName: '<Your-Logic-App-Name>'
-
-stages:
-  - stage: Deploy
-    jobs:
-      - job: DeployADF
-        displayName: "Deploy to Azure Data Factory"
-        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'ADF'))
-        steps:
-          - task: UseDotNet@2
-            inputs:
-              packageType: 'sdk'
-              version: '6.x'
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: $(azureSubscription)
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                az datafactory pipeline create --factory-name $(adfName) --resource-group $(resourceGroup) --name 'pipeline_name' --pipeline @path/to/your/adf_pipeline.json
-
-      - job: DeployDatabricks
-        displayName: "Deploy to Azure Databricks"
-        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'Databricks'))
-        steps:
-          - task: DatabricksDeployNotebookTask@0
-            inputs:
-              azureSubscription: $(azureSubscription)
-              databricksInstance: $(databricksWorkspace)
-              sourcePath: 'path/to/your/notebook/file.py'
-              destinationPath: '/Shared/your-notebook-path'
-
-      - job: DeploySQL
-        displayName: "Deploy to Azure SQL Database"
-        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'SQL'))
-        steps:
-          - task: SqlAzureDacpacDeployment@1
-            inputs:
-              azureSubscription: $(azureSubscription)
-              ServerName: $(sqlServerName)
-              DatabaseName: '<Your-Database-Name>'
-              SqlUsername: '<Your-SQL-Admin-Username>'
-              SqlPassword: '<Your-SQL-Admin-Password>'
-              DacpacFile: 'path/to/your/database.dacpac'
-              DeployOptions: '/Action:Publish'
-
-      - job: DeployLogicApp
-        displayName: "Deploy to Azure Logic App"
-        condition: or(eq('${{ parameters.deployOption }}', 'All'), eq('${{ parameters.deployOption }}', 'LogicApp'))
-        steps:
-          - task: AzureResourceManagerTemplateDeployment@3
-            inputs:
-              azureSubscription: $(azureSubscription)
-              resourceGroupName: $(resourceGroup)
-              location: '<Your-Region>'
-              templateLocation: 'Linked artifact'
-              csmFile: 'path/to/your/logicapp-template.json'
-              csmParametersFile: 'path/to/your/logicapp-parameters.json'
+if __name__ == '__main__':
+    # Use the PORT environment variable in Azure, or default to 8000 locally
+    port = int(os.getenv("PORT", 8000))
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, APIHandler)
+    print(f"Serving on port {port}...")
+    httpd.serve_forever()
