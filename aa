@@ -1,16 +1,26 @@
+Key Achievements
+Architectural Solutions:
+Designed AKS architecture and integrated Azure OpenAI with API Management.
+Created a PostgreSQL and Redis Cache-based architecture.
+Azure Infrastructure:
+Automated Azure costing with Terraform and updated Terraform modules for FDL.
+Tested ADO pipelines with new service principals for infra and Helm deployments.
+Deployed SHA using ACI/ACR and implemented Kubernetes solutions via Helm charts.
+Development and Automation:
+Built Python Flask app with managed identity, JWT authentication, and CI/CD integration.
+Developed YAML templates for CI/CD (ADF, Databricks, SQL, Logic App).
+Created PowerShell scripts for checking public access and private endpoints.
+Integration and APIs:
+Enabled OpenAI key usage via API Management for broader accessibility.
+Developed embedding APIs and tested functionality.
+Containerization and Code:
+Containerized FDL application and pushed images to ACR.
+Integrated Python code with azure-mgmt-resource.
+Learning and Exploration:
+Explored Terraform features (dynamic blocks, lifecycle management, provisioners).
+Researched GitHub and GitHub Copilot for AI integration.
 
-Implememnt AKS solution for Genpact 
-Azure Costing with Terraform
-test the ado pipelines with new service principal for infra deployment and helm deploy
-Need to look in several Terrafom Topics (Dynamic block, life cycle mangement, file provisioner, remote provisioner, local provisioners)
-Passing the openAI keys through API management for better reach
-Implementation of Azure Kubernets solutions through Helam charts
-Prepare the Yaml templates for ADF, DataBricks,SQL, Logic APP for CI/CD
-deploying of sha using aci/acr
-create a powershell script to check public access and private endpoints
-create an architecture using postgress and redis cache
-Python code ready integrating with azure-mgmt-resource
-fdl application is containerized and image is uploaded in acr
-create embedding api and test the code
-update and test terraform module for fdl 
-Explore the GitHub and GitHub copilot interms of AI 
+
+
+
+
