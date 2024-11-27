@@ -1,124 +1,16 @@
-import os
-from flask import Flask, request, jsonify
-import pyodbc, struct
-from azure.identity import DefaultAzureCredential
-from flask_jwt_extended import (
-    JWTManager, create_access_token,
-    jwt_required, get_jwt_identity
-)
-from werkzeug.security import generate_password_hash, check_password_hash
-import openai
-from datetime import timedelta
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_secret_key')
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your_jwt_secret_key')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
-
-jwt = JWTManager(app)
-
-connection_string = (
-    "Driver={ODBC Driver 18 for SQL Server};"
-    "Server=tcp:testdemoapp.database.windows.net,1433;"
-    "Database=testdemo;"
-    "Encrypt=yes;"
-    "TrustServerCertificate=no;"
-    "Connection Timeout=30"
-)
-
-def get_conn():
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
-    token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("UTF-16-LE")
-    token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
-    SQL_COPT_SS_ACCESS_TOKEN = 1256  
-    conn = pyodbc.connect(connection_string, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
-    return conn
-
-def create_users_table():
-    with get_conn() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            IF NOT EXISTS (
-                SELECT * FROM sysobjects WHERE name='users' and xtype='U'
-            )
-            CREATE TABLE users (
-                id INT PRIMARY KEY IDENTITY(1,1),
-                username VARCHAR(255) NOT NULL UNIQUE,
-                password VARCHAR(255) NOT NULL
-            )
-        """)
-        conn.commit()
-
-create_users_table()
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        return jsonify({'message': 'Username and password are required.'}), 400
-
-    hashed_password = generate_password_hash(password, method='sha256')
-
-    try:
-        with get_conn() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE username = ?", username)
-            if cursor.fetchone():
-                return jsonify({'message': 'Username already exists.'}), 400
-
-            cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", username, hashed_password)
-            conn.commit()
-            return jsonify({'message': 'User registered successfully.'}), 201
-    except Exception as e:
-        return jsonify({'message': 'Registration failed.', 'error': str(e)}), 500
-
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        return jsonify({'message': 'Username and password are required.'}), 400
-
-    try:
-        with get_conn() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT password FROM users WHERE username = ?", username)
-            result = cursor.fetchone()
-
-            if not result or not check_password_hash(result[0], password):
-                return jsonify({'message': 'Invalid credentials.'}), 401
-
-            access_token = create_access_token(identity=username)
-            return jsonify({'token': access_token}), 200
-    except Exception as e:
-        return jsonify({'message': 'Login failed.', 'error': str(e)}), 500
-
-@app.route('/genai', methods=['POST'])
-@jwt_required()
-def genai():
-    current_user = get_jwt_identity()
-    data = request.get_json()
-    prompt = data.get('prompt')
-
-    if not prompt:
-        return jsonify({'message': 'Prompt is required.'}), 400
-
-    openai.api_key = os.environ.get('OPENAI_API_KEY')
-
-    try:
-        response = openai.Completion.create(
-            engine='davinci',
-            prompt=prompt,
-            max_tokens=150
-        )
-        return jsonify({'response': response.choices[0].text.strip()}), 200
-    except Exception as e:
-        return jsonify({'message': 'OpenAI API error.', 'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
+Implememnt AKS solution for Genpact 
+Azure Costing with Terraform
+test the ado pipelines with new service principal for infra deployment and helm deploy
+Need to look in several Terrafom Topics (Dynamic block, life cycle mangement, file provisioner, remote provisioner, local provisioners)
+Passing the openAI keys through API management for better reach
+Implementation of Azure Kubernets solutions through Helam charts
+Prepare the Yaml templates for ADF, DataBricks,SQL, Logic APP for CI/CD
+deploying of sha using aci/acr
+create a powershell script to check public access and private endpoints
+create an architecture using postgress and redis cache
+Python code ready integrating with azure-mgmt-resource
+fdl application is containerized and image is uploaded in acr
+create embedding api and test the code
+update and test terraform module for fdl 
+Explore the GitHub and GitHub copilot interms of AI 
