@@ -1,4 +1,47 @@
-curl -X POST "https://<your-document-intelligence-endpoint>.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document:analyze?api-version=2023-07-31" \
--H "Ocp-Apim-Subscription-Key: <your-api-key>" \
--H "Content-Type: application/pdf" \
---data-binary "@/path/to/your/file.pdf"
+parameters:
+  envName: ''
+  resource_group_name: ''
+  storageAccountName: ''
+  containerName: ''
+  azureSubscription: ''
+
+
+steps:
+- task: TerraformInstaller@1
+  inputs:
+    terraformVersion: 'latest'
+
+- task: TerraformTaskV4@4
+  displayName: Terraform Initialize
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/pipelines/storage-account-module'
+    backendServiceArm: ${{ parameters.azureSubscription }}
+    backendAzureRmResourceGroupName: ${{ parameters.resource_group_name }}
+    backendAzureRmStorageAccountName: ${{ parameters.storageAccountName }}
+    backendAzureRmContainerName: ${{ parameters.containerName }}
+    backendAzureRmKey: 'tf.tfstate'
+
+- task: TerraformTaskV4@4
+  displayName: Terraform Plan
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/pipelines/storage-account-module'
+    environmentServiceNameAzureRM: ${{ parameters.azureSubscription }}
+
+- task: TerraformTaskV4@4
+  inputs:
+    provider: 'azurerm'
+    command: 'apply'
+    environmentServiceNameAzureRM: ${{ parameters.azureSubscription }}
+    workingDirectory: '$(System.DefaultWorkingDirectory)/pipelines/storage-account-module'
+   
+
+
+    
+
+
+
+
