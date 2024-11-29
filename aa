@@ -1,47 +1,35 @@
+resources:
+  repositories: 
+    - repository: projectonerepo # Simple name to reference this repository at a later step
+      type: git
+      name: BH-Demo/tf-test
+      ref: refs/heads/main 
+
+
+trigger:
+  - none
+
+
+pool:
+  vmImage: ubuntu-latest
+
+  
+
 parameters:
-  envName: ''
-  resource_group_name: ''
-  storageAccountName: ''
-  containerName: ''
-  azureSubscription: ''
+  envName: 'dev'
+  resource_group_name: 'AciAcrSHA-RG'
+  storageAccountName: 'testparavsa'
+  containerName: 'containertestparav'
+  azureSubscription: 'AppforBrainboardServerless360'
 
 
-steps:
-- task: TerraformInstaller@1
-  inputs:
-    terraformVersion: 'latest'
-
-- task: TerraformTaskV4@4
-  displayName: Terraform Initialize
-  inputs:
-    provider: 'azurerm'
-    command: 'init'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/pipelines/storage-account-module'
-    backendServiceArm: ${{ parameters.azureSubscription }}
-    backendAzureRmResourceGroupName: ${{ parameters.resource_group_name }}
-    backendAzureRmStorageAccountName: ${{ parameters.storageAccountName }}
-    backendAzureRmContainerName: ${{ parameters.containerName }}
-    backendAzureRmKey: 'tf.tfstate'
-
-- task: TerraformTaskV4@4
-  displayName: Terraform Plan
-  inputs:
-    provider: 'azurerm'
-    command: 'plan'
-    workingDirectory: '$(System.DefaultWorkingDirectory)/pipelines/storage-account-module'
-    environmentServiceNameAzureRM: ${{ parameters.azureSubscription }}
-
-- task: TerraformTaskV4@4
-  inputs:
-    provider: 'azurerm'
-    command: 'apply'
-    environmentServiceNameAzureRM: ${{ parameters.azureSubscription }}
-    workingDirectory: '$(System.DefaultWorkingDirectory)/pipelines/storage-account-module'
-   
-
-
-    
-
-
+extends:
+  template: pipelines/terraform-template.yml@projectonerepo
+  parameters: 
+    envName: ${{ parameters.envName}}
+    resource_group_name: ${{ parameters.resource_group_name }}
+    storageAccountName: ${{ parameters.storageAccountName}}
+    containerName: ${{ parameters.containerName }}
+    azureSubscription: ${{ parameters.azureSubscription }}
 
 
