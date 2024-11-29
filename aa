@@ -1,35 +1,38 @@
 resources:
   repositories: 
-    - repository: projectonerepo # Simple name to reference this repository at a later step
+    - repository: projectonerepo # Simple name to reference this repository later
       type: git
       name: BH-Demo/tf-test
-      ref: refs/heads/main 
-
+      ref: refs/heads/main
 
 trigger:
   - none
 
-
 pool:
-  vmImage: ubuntu-latest
-
-  
+  vmImage: 'ubuntu-latest'
 
 parameters:
-  envName: 'dev'
-  resource_group_name: 'AciAcrSHA-RG'
-  storageAccountName: 'testparavsa'
-  containerName: 'containertestparav'
-  azureSubscription: 'AppforBrainboardServerless360'
-
+  - name: envName
+    type: string
+    default: 'dev'
+  - name: resource_group_name
+    type: string
+    default: 'AciAcrSHA-RG'
+  - name: storageAccountName
+    type: string
+    default: 'testparavsa'
+  - name: containerName
+    type: string
+    default: 'containertestparav'
+  - name: azureSubscription
+    type: string
+    default: 'AppforBrainboardServerless360'
 
 extends:
   template: pipelines/terraform-template.yml@projectonerepo
   parameters: 
-    envName: ${{ parameters.envName}}
+    envName: ${{ parameters.envName }}
     resource_group_name: ${{ parameters.resource_group_name }}
-    storageAccountName: ${{ parameters.storageAccountName}}
+    storageAccountName: ${{ parameters.storageAccountName }}
     containerName: ${{ parameters.containerName }}
     azureSubscription: ${{ parameters.azureSubscription }}
-
-
