@@ -19,3 +19,17 @@ resource "azurerm_resource_type" "example" {
     }
   }
 }
+
+
+
+
+
+resource_config = {
+  name                = "my-resource"
+  location            = "East US"
+  resource_group_name = "my-resource-group"
+  properties = [
+    { name = "property1", value = "value1" },
+    { name = "property2", value = "value2" },
+  ]
+}
