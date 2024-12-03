@@ -1,28 +1,21 @@
-resources:
-  repositories: 
-    - repository: projectonerepo # Simple name to reference this repository later
-      type: git
-      name: BH-Demo/tf-test
-      ref: refs/heads/main
+# Define the variable for dynamic input
+variable "resource_config" {
+  description = "Dynamic configuration for the resource"
+  type        = map(any)
+}
 
-trigger:
-  - none
+# Example resource using dynamic block
+resource "azurerm_resource_type" "example" {
+  name                = var.resource_config["name"]
+  location            = var.resource_config["location"]
+  resource_group_name = var.resource_config["resource_group_name"]
 
-pool:
-  vmImage: 'ubuntu-latest'
-
-variables:
-  envName: 'dev'
-  resource_group_name: 'AciAcrSHA-RG'
-  storageAccountName: 'testparavsa'
-  containerName: 'containertestparav'
-  azureSubscription: 'AppforBrainboardServerless360'
-
-extends:
-  template: pipelines/terraform-template.yml@projectonerepo
-  parameters: 
-    envName: ${{ variables.envName }}
-    resource_group_name: ${{ variables.resource_group_name }}
-    storageAccountName: ${{ variables.storageAccountName }}
-    containerName: ${{ variables.containerName }}
-    azureSubscription: ${{ variables.azureSubscription }}
+  # Dynamic block
+  dynamic "property" {
+    for_each = var.resource_config["properties"] != null ? var.resource_config["properties"] : []
+    content {
+      name  = property.value["name"]
+      value = property.value["value"]
+    }
+  }
+}
