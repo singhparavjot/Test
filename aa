@@ -33,3 +33,22 @@ resource_config = {
     { name = "property2", value = "value2" },
   ]
 }
+
+
+
+
+#### LIFE CYCLE management 
+
+resource "azurerm_resource_type" "example" {
+  name     = "example-resource"
+  location = "East US"
+
+  # Lifecycle block
+  lifecycle {
+    prevent_destroy = true  # Prevent accidental deletion
+    ignore_changes  = [tags, "settings"]  # Ignore changes to specified attributes
+    create_before_destroy = true  # Replace resource only after new resource is created
+  }
+}
+
+
