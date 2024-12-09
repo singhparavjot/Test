@@ -6,36 +6,39 @@ pool:
 
 variables:
   tableauServer: 'http://<your-tableau-server>'
-  tableauUsername: $(TableauUser)
-  tableauPassword: $(TableauPass)
+  devSite: '<dev-site-name>'  # Replace with your dev site name
+  prodSite: '<prod-site-name>' # Replace with your prod site name
+  tableauUsername: $(TableauUser)  # Stored securely in Azure DevOps
+  tableauPassword: $(TableauPass)  # Stored securely in Azure DevOps
 
 steps:
 - script: |
-    echo "Downloading Tabcmd..."
-    wget -O tabcmd-installer.deb https://downloads.tableau.com/releases/tabcmd/2023.2.0/tabcmd-2023-2-0_amd64.deb
-    
     echo "Installing Tabcmd..."
-    sudo dpkg -i tabcmd-installer.deb || sudo apt-get -f install -y  # Handle missing dependencies
+    sudo apt update
+    sudo apt install -y wget unzip
+    wget https://downloads.tableau.com/tssoftware/tabcmd-linux-<version>.deb -O tabcmd.deb
+    sudo dpkg -i tabcmd.deb
+    echo "Tabcmd installed successfully."
+  displayName: 'Install Tabcmd'
+
+- script: |
+    echo "Logging into Tableau Server (Dev site)..."
+    tabcmd login -s $(tableauServer) --site $(devSite) -u $(tableauUsername) -p $(tableauPassword)
     
-    echo "Cleaning up installer..."
-    rm tabcmd-installer.deb
-  displayName: 'Install Tabcmd on Ubuntu'
-
-- script: |
-    echo "Verifying Tabcmd installation..."
-    tabcmd --version
-  displayName: 'Verify Tabcmd Installation'
-
-- script: |
-    echo "Logging into Tableau Server..."
-    tabcmd login -s $(tableauServer) -u $(tableauUsername) -p $(tableauPassword)
-
-    echo "Exporting workbook from dev site..."
+    echo "Exporting workbook from Dev site..."
     tabcmd get "/workbooks/<workbook-name>.twbx" -f dev_workbook.twbx
-
-    echo "Publishing workbook to prod site..."
-    tabcmd publish "dev_workbook.twbx" --project "Production Project" --name "<workbook-name>" --overwrite
-
-    echo "Logging out from Tableau Server..."
+    
+    echo "Logging out from Tableau Server (Dev site)..."
     tabcmd logout
-  displayName: 'Run Tabcmd Commands'
+  displayName: 'Export Workbook from Dev Site'
+
+- script: |
+    echo "Logging into Tableau Server (Prod site)..."
+    tabcmd login -s $(tableauServer) --site $(prodSite) -u $(tableauUsername) -p $(tableauPassword)
+    
+    echo "Publishing workbook to Prod site..."
+    tabcmd publish "dev_workbook.twbx" --project "Production Project" --name "<workbook-name>" --overwrite
+    
+    echo "Logging out from Tableau Server (Prod site)..."
+    tabcmd logout
+  displayName: 'Publish Workbook to Prod Site'
