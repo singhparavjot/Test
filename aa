@@ -2,54 +2,40 @@ trigger:
 - main
 
 pool:
-  name: SelfHostedAgentPool  # Replace with your self-hosted agent pool
+  vmImage: 'ubuntu-latest'
 
 variables:
-  tableauServer: 'http://<your-tableau-server-ip>'
-  tableauUsername: $(TableauUser)  # Stored securely in pipeline secrets
-  tableauPassword: $(TableauPass)  # Stored securely in pipeline secrets
+  tableauServer: 'http://<your-tableau-server>'
+  tableauUsername: $(TableauUser)
+  tableauPassword: $(TableauPass)
 
 steps:
 - script: |
-    echo "Starting deployment process..."
-    tabcmd login -s $(tableauServer) -u $(tableauUsername) -p $(tableauPassword)
-
-    echo "Exporting workbook from development site..."
-    tabcmd get "/workbooks/<workbook-name>.twbx" -f dev_workbook.twbx
-
-    echo "Publishing workbook to production site..."
-    tabcmd publish "dev_workbook.twbx" --project "Production Project" --name "<workbook-name>" --overwrite
-
-    tabcmd logout
-  displayName: 'Deploy Workbook from Dev to Prod'
-
-
-
-
-##############
-
-
-
-trigger:
-- main
-
-pool:
-  vmImage: 'windows-latest'
-
-steps:
-- script: |
-    curl -O https://your-secure-location/tabcmd-installer.exe
-    start /wait tabcmd-installer.exe /quiet
-  displayName: 'Install Tabcmd'
+    echo "Downloading Tabcmd..."
+    wget -O tabcmd-installer.deb https://downloads.tableau.com/releases/tabcmd/2023.2.0/tabcmd-2023-2-0_amd64.deb
+    
+    echo "Installing Tabcmd..."
+    sudo dpkg -i tabcmd-installer.deb || sudo apt-get -f install -y  # Handle missing dependencies
+    
+    echo "Cleaning up installer..."
+    rm tabcmd-installer.deb
+  displayName: 'Install Tabcmd on Ubuntu'
 
 - script: |
+    echo "Verifying Tabcmd installation..."
     tabcmd --version
-    echo "Tabcmd installed successfully"
   displayName: 'Verify Tabcmd Installation'
 
 - script: |
-    tabcmd login -s http://<your-tableau-server> -u $(TableauUser) -p $(TableauPass)
-    tabcmd publish "path_to_workbook.twbx" --project "Production Project"
+    echo "Logging into Tableau Server..."
+    tabcmd login -s $(tableauServer) -u $(tableauUsername) -p $(tableauPassword)
+
+    echo "Exporting workbook from dev site..."
+    tabcmd get "/workbooks/<workbook-name>.twbx" -f dev_workbook.twbx
+
+    echo "Publishing workbook to prod site..."
+    tabcmd publish "dev_workbook.twbx" --project "Production Project" --name "<workbook-name>" --overwrite
+
+    echo "Logging out from Tableau Server..."
     tabcmd logout
   displayName: 'Run Tabcmd Commands'
-
