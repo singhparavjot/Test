@@ -1,140 +1,55 @@
-Here's a structured approach to creating a **small presentation** on building an artifact in one Azure DevOps project and deploying it in another.
+trigger:
+- main
 
----
+pool:
+  name: SelfHostedAgentPool  # Replace with your self-hosted agent pool
 
-### **Presentation Outline**
+variables:
+  tableauServer: 'http://<your-tableau-server-ip>'
+  tableauUsername: $(TableauUser)  # Stored securely in pipeline secrets
+  tableauPassword: $(TableauPass)  # Stored securely in pipeline secrets
 
-#### **Slide 1: Title Slide**
-- **Title**: *"Cross-Project CI/CD in Azure DevOps"*
-- **Subtitle**: *"Building and Deploying Artifacts Across Projects"*
-- **Your Name**
-- **Date**
+steps:
+- script: |
+    echo "Starting deployment process..."
+    tabcmd login -s $(tableauServer) -u $(tableauUsername) -p $(tableauPassword)
 
----
+    echo "Exporting workbook from development site..."
+    tabcmd get "/workbooks/<workbook-name>.twbx" -f dev_workbook.twbx
 
-#### **Slide 2: Agenda**
-1. Introduction
-2. Workflow Overview
-3. Key Azure DevOps Concepts
-4. Steps to Build and Deploy Across Projects
-5. Demo Summary
-6. Challenges and Best Practices
-7. Conclusion
+    echo "Publishing workbook to production site..."
+    tabcmd publish "dev_workbook.twbx" --project "Production Project" --name "<workbook-name>" --overwrite
 
----
+    tabcmd logout
+  displayName: 'Deploy Workbook from Dev to Prod'
 
-#### **Slide 3: Introduction**
-- **What is CI/CD?**
-  - Continuous Integration (CI): Build and package code.
-  - Continuous Deployment (CD): Deploy artifacts to target environments.
-- **Why Cross-Project Pipelines?**
-  - Modularize pipelines for scalability.
-  - Reuse components across projects.
 
----
 
-#### **Slide 4: Workflow Overview**
-- **Diagram**:
-  - Project 1 (Build):
-    - Source Code → Build → Publish Artifact.
-  - Project 2 (Deploy):
-    - Consume Artifact → Deploy to Target Environment.
-- **Key Steps**:
-  1. Publish Artifact in Project 1.
-  2. Reference and Download Artifact in Project 2.
-  3. Deploy to Azure (or other targets).
 
----
+##############
 
-#### **Slide 5: Key Azure DevOps Concepts**
-1. **Artifacts**:
-   - Packages or build outputs shared across pipelines.
-2. **Pipeline Resources**:
-   - Mechanism to link pipelines across projects.
-3. **DownloadPipelineArtifact Task**:
-   - Fetch published artifacts for further use.
-4. **Permissions**:
-   - Configure pipeline access and artifact sharing.
 
----
 
-#### **Slide 6: Steps to Build and Deploy Across Projects**
-1. **In Project 1**:
-   - Create a pipeline to:
-     - Build the application.
-     - Publish an artifact (e.g., `zip` or `tar.gz`).
-     ```yaml
-     - task: PublishPipelineArtifact@1
-       inputs:
-         artifactName: 'my-artifact'
-         targetPath: '$(Build.ArtifactStagingDirectory)'
-     ```
-2. **In Project 2**:
-   - Reference the Project 1 pipeline:
-     ```yaml
-     resources:
-       pipelines:
-         - pipeline: project1pipeline
-           project: 'Project1'
-           source: 'PipelineName'
-           branch: 'refs/heads/main'
-           run: latest
-     ```
-   - Download the artifact:
-     ```yaml
-     - task: DownloadPipelineArtifact@2
-       inputs:
-         source: project1pipeline
-         artifact: 'my-artifact'
-         path: '$(Pipeline.Workspace)/artifact'
-     ```
-   - Deploy using the downloaded artifact.
+trigger:
+- main
 
----
+pool:
+  vmImage: 'windows-latest'
 
-#### **Slide 7: Demo Summary**
-1. **Artifact Build in Project 1**:
-   - Pipeline executed and artifact published successfully.
-2. **Artifact Deployment in Project 2**:
-   - Pipeline consumed the artifact and deployed it to the target environment.
-3. **End-to-End Workflow Success**:
-   - Artifacts shared seamlessly across projects.
+steps:
+- script: |
+    curl -O https://your-secure-location/tabcmd-installer.exe
+    start /wait tabcmd-installer.exe /quiet
+  displayName: 'Install Tabcmd'
 
----
+- script: |
+    tabcmd --version
+    echo "Tabcmd installed successfully"
+  displayName: 'Verify Tabcmd Installation'
 
-#### **Slide 8: Challenges and Best Practices**
-- **Challenges**:
-  - Permissions between projects.
-  - Artifact retention policies.
-  - Managing dependencies between pipelines.
-- **Best Practices**:
-  - Use consistent naming conventions for artifacts.
-  - Configure proper access controls.
-  - Leverage pipeline templates for reusability.
+- script: |
+    tabcmd login -s http://<your-tableau-server> -u $(TableauUser) -p $(TableauPass)
+    tabcmd publish "path_to_workbook.twbx" --project "Production Project"
+    tabcmd logout
+  displayName: 'Run Tabcmd Commands'
 
----
-
-#### **Slide 9: Conclusion**
-- Cross-project CI/CD increases modularity and reusability.
-- Azure DevOps provides robust tools for artifact sharing and pipeline management.
-- Implementing these workflows enables scalable, multi-project DevOps practices.
-
----
-
-#### **Slide 10: Questions**
-- Open the floor for questions or feedback.
-
----
-
-### **Visuals and Assets**
-- **Use Diagrams**:
-  - Workflow diagram showing the flow from Project 1 to Project 2.
-- **Screenshots**:
-  - Artifact publishing in Project 1.
-  - Artifact consumption and deployment in Project 2.
-- **Key YAML Code Blocks**:
-  - Highlight relevant YAML snippets.
-
----
-
-If you'd like, I can provide detailed speaker notes or even help create a specific slide deck format! Let me know.
