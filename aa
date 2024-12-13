@@ -1,8 +1,35 @@
-Example Workflow
-Developer Workflow:
-Create a feature branch → Push changes → Open a PR.
-Reviewer approves the PR after reviewing changes and CI results.
-Protection Rules:
-Require approvals and CI checks for merging into the main branch.
-Deployment Trigger:
-The merged main branch automatically triggers the deployment pipeline to production.
+Compute Services
+Virtual Machines (VMs)
+Virtual Machine Scale Sets
+Azure Kubernetes Service (AKS)
+Azure Batch
+App Services
+Azure Functions (Premium Plans)
+Databases
+Azure SQL Database (Serverless Tier)
+Azure SQL Managed Instance
+Azure Cosmos DB
+Azure Database for MySQL/PostgreSQL/MariaDB
+Azure Data Explorer
+Storage and Analytics
+Azure Data Factory
+Azure Synapse Analytics (Dedicated SQL Pools)
+Azure Analysis Services
+Networking
+Azure Firewall
+Application Gateway
+Load Balancers (Standard SKU)
+IoT
+IoT Hub
+Azure Digital Twins
+AI and Machine Learning
+Azure Machine Learning (Compute Instances/Clusters)
+Cognitive Services
+Development and Test
+Azure DevTest Labs
+Big Data
+Azure HDInsight
+Azure Databricks (Clusters)
+Other
+Azure Automation
+Event Hubs
