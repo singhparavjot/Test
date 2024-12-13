@@ -1,42 +1,17 @@
-When writing about **access and privilege management on Git** for a design document, you should address how access is controlled, roles are assigned, and the best practices for securing repositories. Here's a concise section you can include in your design document:
-
----
-
-### **Access and Privilege Management on Git**
-
-**Overview**:
-Access and privilege management in Git ensures secure collaboration by defining roles and permissions for users and teams within the repository. It prevents unauthorized changes and protects sensitive code and data.
-
-**Key Elements**:
-1. **Roles and Permissions**:
-   - **Owner/Admin**: Full control, including managing permissions, branches, and repository settings.
-   - **Maintainer**: Manages branches and reviews/merges pull requests.
-   - **Contributor**: Creates feature branches, commits changes, and submits pull requests.
-   - **Reader**: View-only access to the repository.
-
-2. **Access Levels**:
-   - **Repository Level**: Controls access to specific repositories (e.g., read, write, admin).
-   - **Branch Level**: Defines permissions per branch (e.g., restrict direct commits to `main`).
-
-3. **Authentication**:
-   - Use **SSH keys**, **Personal Access Tokens (PATs)**, or **OAuth** for secure authentication.
-   - Enforce Multi-Factor Authentication (MFA) for all users.
-
-4. **Best Practices**:
-   - Implement **branch protection rules** to enforce pull requests and code reviews for merging changes to `main` or `develop`.
-   - Use **Git hooks** for pre-commit validation.
-   - Regularly audit user permissions and remove unused access.
-   - Use Git services' team/group features to simplify privilege management (e.g., Azure Repos, GitHub Teams).
-
-5. **Sensitive Data Management**:
-   - Prohibit storing sensitive information (e.g., passwords, keys) in repositories.
-   - Use tools like Git hooks or automated scanners to detect secrets in commits.
-
-**Implementation in Azure Repos**:
-- Use Azure DevOps permissions to define role-based access control (RBAC) for repositories and pipelines.
-- Restrict sensitive branches (`main`, `release`) to maintainers and admins only.
-- Enable policies like **required reviewers**, **build validation**, and **work item linking** to enforce quality and traceability.
-
----
-
-Let me know if you'd like a detailed breakdown of specific access rules or workflows!
+Deployment Approval in Git
+Definition:
+Deployment approval in Git involves incorporating manual or automated checks as part of the branching and merging workflow. This ensures only reviewed and approved changes are merged into critical branches (e.g., main or release) before deployment to production.
+Purpose
+Control Changes: Ensure only validated code is promoted for deployment.
+Enforce Quality: Validate changes through code reviews, automated tests, or compliance checks before merging.
+Mitigate Risks: Prevent unreviewed or unauthorized changes from affecting production environments.
+How It Works in Git
+Pull Request Workflow:
+Developers push changes to a feature branch and create a Pull Request (PR) to merge into the target branch (e.g., main or release).
+Reviewers validate the PR and approve it for merging.
+Branch Protection Rules:
+Critical branches (e.g., main) are protected by requiring:
+At least one or more reviewer approvals.
+Passing status checks (e.g., CI tests, linting).
+Deployment Trigger:
+Merging an approved PR into a deployment branch (e.g., release or main) triggers the deployment pipeline.
