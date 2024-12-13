@@ -1,17 +1,11 @@
-Deployment Approval in Git
-Definition:
-Deployment approval in Git involves incorporating manual or automated checks as part of the branching and merging workflow. This ensures only reviewed and approved changes are merged into critical branches (e.g., main or release) before deployment to production.
-Purpose
-Control Changes: Ensure only validated code is promoted for deployment.
-Enforce Quality: Validate changes through code reviews, automated tests, or compliance checks before merging.
-Mitigate Risks: Prevent unreviewed or unauthorized changes from affecting production environments.
-How It Works in Git
-Pull Request Workflow:
-Developers push changes to a feature branch and create a Pull Request (PR) to merge into the target branch (e.g., main or release).
-Reviewers validate the PR and approve it for merging.
-Branch Protection Rules:
-Critical branches (e.g., main) are protected by requiring:
-At least one or more reviewer approvals.
-Passing status checks (e.g., CI tests, linting).
-Deployment Trigger:
-Merging an approved PR into a deployment branch (e.g., release or main) triggers the deployment pipeline.
+Best Practices
+Define Clear Roles:
+Specify who can approve and merge PRs.
+Use repository settings to enforce role-based access.
+Combine with CI/CD:
+Integrate automated tests to verify changes before they are reviewed.
+Allow deployment pipelines to run only after PR approvals.
+Use Templates:
+Standardize PR descriptions to ensure reviewers have all the necessary context.
+Automate Approvals for Lower Environments:
+For non-production branches, use automated checks to streamline the workflow.
