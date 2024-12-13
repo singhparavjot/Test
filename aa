@@ -1,11 +1,8 @@
-Best Practices
-Define Clear Roles:
-Specify who can approve and merge PRs.
-Use repository settings to enforce role-based access.
-Combine with CI/CD:
-Integrate automated tests to verify changes before they are reviewed.
-Allow deployment pipelines to run only after PR approvals.
-Use Templates:
-Standardize PR descriptions to ensure reviewers have all the necessary context.
-Automate Approvals for Lower Environments:
-For non-production branches, use automated checks to streamline the workflow.
+Example Workflow
+Developer Workflow:
+Create a feature branch → Push changes → Open a PR.
+Reviewer approves the PR after reviewing changes and CI results.
+Protection Rules:
+Require approvals and CI checks for merging into the main branch.
+Deployment Trigger:
+The merged main branch automatically triggers the deployment pipeline to production.
