@@ -1,35 +1,186 @@
-Compute Services
-Virtual Machines (VMs)
-Virtual Machine Scale Sets
-Azure Kubernetes Service (AKS)
-Azure Batch
-App Services
-Azure Functions (Premium Plans)
-Databases
-Azure SQL Database (Serverless Tier)
-Azure SQL Managed Instance
-Azure Cosmos DB
-Azure Database for MySQL/PostgreSQL/MariaDB
-Azure Data Explorer
-Storage and Analytics
-Azure Data Factory
-Azure Synapse Analytics (Dedicated SQL Pools)
-Azure Analysis Services
-Networking
-Azure Firewall
-Application Gateway
-Load Balancers (Standard SKU)
-IoT
-IoT Hub
-Azure Digital Twins
-AI and Machine Learning
-Azure Machine Learning (Compute Instances/Clusters)
-Cognitive Services
-Development and Test
-Azure DevTest Labs
-Big Data
-Azure HDInsight
-Azure Databricks (Clusters)
-Other
-Azure Automation
-Event Hubs
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+)
+
+var (
+	cred *azidentity.DefaultAzureCredential
+)
+
+func main() {
+	var err error
+	// Authenticate using Azure CLI or Managed Identity
+	cred, err = azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		log.Fatalf("Failed to obtain a credential: %v", err)
+	}
+
+	r := mux.NewRouter()
+
+	// Endpoints
+	r.HandleFunc("/subscriptions", listSubscriptionsHandler).Methods("GET")
+	r.HandleFunc("/subscriptions/{subscriptionId}/resourceGroups", listResourceGroupsHandler).Methods("GET")
+	r.HandleFunc("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/resources", listResourcesHandler).Methods("GET")
+	r.HandleFunc("/resource/{resourceID}", getResourceConfigHandler).Methods("GET")
+	r.HandleFunc("/resource/{resourceID}/update", updateResourceConfigHandler).Methods("POST")
+
+	fmt.Println("Server running at http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", r))
+}
+
+// listSubscriptionsHandler lists all subscriptions
+func listSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	client, err := armresources.NewSubscriptionsClient(cred, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	pager := client.NewListPager(nil)
+	var subs []armresources.Subscription
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		subs = append(subs, page.Value...)
+	}
+
+	writeJSON(w, subs)
+}
+
+// listResourceGroupsHandler lists resource groups in a given subscription
+func listResourceGroupsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	subID := vars["subscriptionId"]
+
+	rgClient, err := armresources.NewResourceGroupsClient(subID, cred, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	pager := rgClient.NewListPager(nil)
+	var rgs []armresources.ResourceGroup
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		rgs = append(rgs, page.Value...)
+	}
+
+	writeJSON(w, rgs)
+}
+
+// listResourcesHandler lists resources in a given resource group
+func listResourcesHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	subID := vars["subscriptionId"]
+	rgName := vars["resourceGroupName"]
+
+	resClient, err := armresources.NewClient(subID, cred, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	pager := resClient.NewListByResourceGroupPager(rgName, nil)
+	var resources []armresources.GenericResourceExpanded
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		resources = append(resources, page.Value...)
+	}
+
+	writeJSON(w, resources)
+}
+
+// getResourceConfigHandler returns the configuration of a specific resource
+func getResourceConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	resourceID := vars["resourceID"]
+
+	// Fetch generic resource details
+	resClient, err := armresources.NewClient("", cred, nil) // Subscription ID is inferred from the resource ID
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	resource, err := resClient.GetByID(ctx, resourceID, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	writeJSON(w, resource)
+}
+
+// updateResourceConfigHandler updates a specific resource configuration
+func updateResourceConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	resourceID := vars["resourceID"]
+
+	// Fetch generic resource details to prepare for the update
+	resClient, err := armresources.NewClient("", cred, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	// Decode the updated resource properties from the request body
+	var updatedProps armresources.GenericResource
+	if err := json.NewDecoder(r.Body).Decode(&updatedProps); err != nil {
+		httpError(w, fmt.Errorf("invalid request body: %v", err))
+		return
+	}
+
+	// Update the resource
+	pollerResp, err := resClient.BeginUpdateByID(ctx, resourceID, updatedProps, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	// Wait for the update to complete
+	_, err = pollerResp.PollUntilDone(ctx, nil)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "updated"})
+}
+
+// Utility functions
+func writeJSON(w http.ResponseWriter, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
+func httpError(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write([]byte(err.Error()))
+}
