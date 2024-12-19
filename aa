@@ -1,46 +1,42 @@
-Here’s a high-level professional DevOps plan for migrating Tableau workbooks from on-premises to Tableau Cloud using Azure CI/CD pipelines, including estimated time frames:
+trigger:
+- none
 
-### 1. **Assessment and Planning (3–5 Days)**
-   - **Tasks**: 
-     - Analyze the current on-prem Tableau setup, including workbook dependencies, data sources, and customizations.
-     - Define migration scope, identifying priority workbooks and datasets.
-     - Plan CI/CD pipeline structure for packaging, testing, and deployment.
-   - **Deliverables**: Migration strategy document, timeline, and risk assessment.
+pool:
+  vmImage: 'ubuntu-latest' 
 
----
+variables:
+- group: tableau-test
 
-### 2. **Pipeline Development and Automation (5–7 Days)**
-   - **Tasks**:
-     - Create YAML-based Azure DevOps pipelines for workbook extraction, transformation, and deployment.
-     - Integrate authentication and secure access to Tableau Cloud using service accounts or PATs.
-     - Develop scripts for metadata validation and workbook integrity checks.
-   - **Deliverables**: Automated pipelines tested in a sandbox environment.
 
----
+steps:
+- script: |
+    pip install tabcmd
+  displayName: 'Install Tabcmd on Ubuntu'
 
-### 3. **Environment Setup and Data Source Validation (3–4 Days)**
-   - **Tasks**:
-     - Configure Tableau Cloud environments and validate access.
-     - Test connectivity and performance of migrated data sources (live or extracts).
-     - Implement environment-specific configurations in CI/CD workflows.
-   - **Deliverables**: Verified environments ready for migration.
+- script: |
+    echo "Verifying Tabcmd installation..."
+    tabcmd --version
+  displayName: 'Verify Tabcmd Installation'
 
----
 
-### 4. **Migration Execution and Testing (5–7 Days)**
-   - **Tasks**:
-     - Use pipelines to migrate Tableau workbooks to Tableau Cloud in batches.
-     - Conduct functional and regression testing on deployed workbooks.
-     - Verify workbook performance and data accuracy in Tableau Cloud.
-   - **Deliverables**: Successful migration of workbooks with sign-off on test results.
+- script: |
+    echo "Logging into Tableau Server (Dev site)..."
+    tabcmd login -s $(tableauServer) --site $(devSite) -u $(tableauUsername) -p $(tableauPassword)
+    
+    echo "Exporting workbook from Dev site..."
+    tabcmd get "/workbooks/ProjectTest.twbx" -f dev_workbook.twbx -p $(tableauPassword)
+    
+    echo "Logging out from Tableau Server (Dev site)..."
+    tabcmd logout
+  displayName: 'Export Workbook from Dev Site'
 
----
-
-### 5. **Post-Migration Optimization and Monitoring (3–4 Days)**
-   - **Tasks**:
-     - Optimize pipelines for ongoing updates or deployments to Tableau Cloud.
-     - Implement monitoring and logging mechanisms for deployments.
-     - Train end-users or admin teams on Tableau Cloud processes.
-   - **Deliverables**: Optimized CI/CD pipelines and comprehensive monitoring setup.
-
-This approach ensures a structured migration with minimal disruption, leveraging DevOps practices for efficiency and reliability. Adjust timelines based on the number and complexity of workbooks.
+- script: |
+    echo "Logging into Tableau Server (Sit site)..."
+    tabcmd login -s $(tableauServer) --site $(sitSite) -u $(tableauUsername) -p $(tableauPassword)
+    
+    echo "Publishing workbook to SIT site..."
+    tabcmd publish "dev_workbook.twbx" --site $(sitSite) --name "ProjectTest" --overwrite -p $(tableauPassword)
+    
+    echo "Logging out from Tableau Server (SIT site)..."
+    tabcmd logout
+  displayName: 'Publish Workbook to SIT Site'
