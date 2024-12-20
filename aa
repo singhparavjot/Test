@@ -1,42 +1,66 @@
-trigger:
-- none
+import requests
+import sys
 
-pool:
-  vmImage: 'ubuntu-latest' 
+# Tableau Server and Authentication Details
+TABLEAU_SERVER = "https://your-tableau-server"  # Replace with your Tableau Server URL
+PAT_NAME = "your-pat-name"  # Replace with your PAT name
+PAT_TOKEN = "your-pat-token"  # Replace with your PAT value
+PROJECT_NAME = "Default"  # Project to list workbooks from
 
-variables:
-- group: tableau-test
+# Step 1: Authenticate with Tableau Server
+def authenticate():
+    url = f"{TABLEAU_SERVER}/api/3.15/auth/signin"
+    payload = {
+        "credentials": {
+            "personalAccessTokenName": PAT_NAME,
+            "personalAccessTokenSecret": PAT_TOKEN,
+            "site": {"contentUrl": ""}
+        }
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    data = response.json()
+    return data["credentials"]["token"], data["credentials"]["site"]["id"]
 
+# Step 2: Get the Project ID for the Specified Project Name
+def get_project_id(auth_token, site_id):
+    url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/projects"
+    headers = {"X-Tableau-Auth": auth_token}
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    projects = response.json()["projects"]["project"]
+    for project in projects:
+        if project["name"] == PROJECT_NAME:
+            return project["id"]
+    raise ValueError(f"Project '{PROJECT_NAME}' not found.")
 
-steps:
-- script: |
-    pip install tabcmd
-  displayName: 'Install Tabcmd on Ubuntu'
+# Step 3: List Workbooks in the Project
+def list_workbooks(auth_token, site_id, project_id):
+    url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/workbooks"
+    headers = {"X-Tableau-Auth": auth_token}
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    workbooks = response.json()["workbooks"]["workbook"]
+    print(f"Workbooks in Project '{PROJECT_NAME}':")
+    for workbook in workbooks:
+        if workbook["project"]["id"] == project_id:
+            print(f"- {workbook['name']} (ID: {workbook['id']})")
 
-- script: |
-    echo "Verifying Tabcmd installation..."
-    tabcmd --version
-  displayName: 'Verify Tabcmd Installation'
+# Step 4: Main Execution
+def main():
+    try:
+        # Authenticate and get credentials
+        auth_token, site_id = authenticate()
 
+        # Get the project ID
+        project_id = get_project_id(auth_token, site_id)
 
-- script: |
-    echo "Logging into Tableau Server (Dev site)..."
-    tabcmd login -s $(tableauServer) --site $(devSite) -u $(tableauUsername) -p $(tableauPassword)
-    
-    echo "Exporting workbook from Dev site..."
-    tabcmd get "/workbooks/ProjectTest.twbx" -f dev_workbook.twbx -p $(tableauPassword)
-    
-    echo "Logging out from Tableau Server (Dev site)..."
-    tabcmd logout
-  displayName: 'Export Workbook from Dev Site'
+        # List all workbooks in the project
+        list_workbooks(auth_token, site_id, project_id)
 
-- script: |
-    echo "Logging into Tableau Server (Sit site)..."
-    tabcmd login -s $(tableauServer) --site $(sitSite) -u $(tableauUsername) -p $(tableauPassword)
-    
-    echo "Publishing workbook to SIT site..."
-    tabcmd publish "dev_workbook.twbx" --site $(sitSite) --name "ProjectTest" --overwrite -p $(tableauPassword)
-    
-    echo "Logging out from Tableau Server (SIT site)..."
-    tabcmd logout
-  displayName: 'Publish Workbook to SIT Site'
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
