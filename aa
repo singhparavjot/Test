@@ -2,13 +2,13 @@ import requests
 import argparse
 import sys
 
-def authenticate(server, pat_name, pat_token):
+def authenticate(server, site, pat_name, pat_token):
     url = f"{server}/api/3.15/auth/signin"
     payload = {
         "credentials": {
             "personalAccessTokenName": pat_name,
             "personalAccessTokenSecret": pat_token,
-            "site": {"contentUrl": ""}
+            "site": {"contentUrl": site}
         }
     }
     response = requests.post(url, json=payload)
@@ -25,7 +25,7 @@ def get_project_id(server, auth_token, site_id, project_name):
     for project in projects:
         if project["name"] == project_name:
             return project["id"]
-    raise ValueError(f"Project '{project_name}' not found.")
+    raise ValueError(f"Project '{project_name}' not found in the site.")
 
 def list_workbooks(server, auth_token, site_id, project_id, project_name):
     url = f"{server}/api/3.15/sites/{site_id}/workbooks"
@@ -41,6 +41,7 @@ def list_workbooks(server, auth_token, site_id, project_id, project_name):
 def main():
     parser = argparse.ArgumentParser(description="List workbooks in a Tableau project.")
     parser.add_argument("--server", required=True, help="Tableau Server URL")
+    parser.add_argument("--site", required=True, help="Tableau Site name")
     parser.add_argument("--pat-name", required=True, help="Personal Access Token Name")
     parser.add_argument("--pat-token", required=True, help="Personal Access Token Value")
     parser.add_argument("--project", required=True, help="Project name to list workbooks from")
@@ -49,7 +50,7 @@ def main():
 
     try:
         # Authenticate and get credentials
-        auth_token, site_id = authenticate(args.server, args.pat_name, args.pat_token)
+        auth_token, site_id = authenticate(args.server, args.site, args.pat_name, args.pat_token)
 
         # Get the project ID
         project_id = get_project_id(args.server, auth_token, site_id, args.project)
