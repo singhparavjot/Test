@@ -4,7 +4,7 @@ import argparse
 import tableauserverclient as TSC
 
 def main():
-    parser = argparse.ArgumentParser(description="List Tableau workbooks by site and project.")
+    parser = argparse.ArgumentParser(description="List Tableau workbooks by site and optional project.")
     parser.add_argument('--server', required=True, help='Server URL (e.g., https://my-tableau-server.com)')
     parser.add_argument('--site', required=True, help='Site name (site ID)')
     parser.add_argument('--token-value', required=True, help='Personal Access Token value')
@@ -28,36 +28,34 @@ def main():
         with server.auth.sign_in(tableau_auth):
             print(f"Successfully signed in as token '{args.token_name}' on site '{args.site}'")
 
-            # If a project name was provided, find that project
             target_project = None
             if args.project_name:
+                # Fetch all projects, then find the one that matches
                 all_projects, _ = server.projects.get()
                 for project in all_projects:
                     if project.name.lower() == args.project_name.lower():
                         target_project = project
                         break
-
-                if not target_project:
+                
+                if target_project:
+                    print(f"Found matching project: {target_project.name} (ID: {target_project.id})")
+                else:
                     print(f"Project '{args.project_name}' not found. Listing all workbooks in the site.")
-            
-            # Build request options if we have a target project
-            request_opts = TSC.RequestOptions()
+
+            # Get ALL workbooks in the site
+            all_workbooks, pagination_item = server.workbooks.get()
+            print(f"\nTotal workbooks in site: {pagination_item.total_available}")
+
+            # If a specific project was found, filter locally by project_id
             if target_project:
-                request_opts.filter.add(
-                    TSC.Filter(
-                        field=TSC.RequestOptions.Field.ProjectId,
-                        operator=TSC.RequestOptions.Operator.Equals,
-                        value=target_project.id
-                    )
-                )
-
-            # Get the list of workbooks (either for the project or entire site)
-            all_workbooks, pagination_item = server.workbooks.get(request_opts)
-
-            # Print out the name of each workbook
-            print(f"\nFound {pagination_item.total_available} workbooks.")
-            for wb in all_workbooks:
-                print(f"- {wb.name} (ID: {wb.id})")
+                filtered_workbooks = [wb for wb in all_workbooks if wb.project_id == target_project.id]
+                print(f"Workbooks in project '{target_project.name}': {len(filtered_workbooks)}")
+                for wb in filtered_workbooks:
+                    print(f"- {wb.name} (ID: {wb.id})")
+            else:
+                # Otherwise, list all workbooks
+                for wb in all_workbooks:
+                    print(f"- {wb.name} (ID: {wb.id})")
 
     except TSC.ServerResponseError as e:
         print(f"Error communicating with Tableau Server: {e}")
