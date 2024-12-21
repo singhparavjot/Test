@@ -5,56 +5,58 @@ import os
 import tableauserverclient as TSC
 
 def main():
-    parser = argparse.ArgumentParser(description="List and export Tableau workbooks in a specific project (folder).")
-    parser.add_argument('--server', required=True, help='Server URL (e.g., https://my-tableau-server.com)')
-    parser.add_argument('--site', required=True, help='Site name (site ID)')
-    parser.add_argument('--token-value', required=True, help='Personal Access Token value')
-    parser.add_argument('--token-name', required=True, help='Personal Access Token name')
-    parser.add_argument('--project-name', required=True, help='Name of the Tableau project (folder)')
+    parser = argparse.ArgumentParser(description="Export Tableau workbooks from a project and publish them to another site/project.")
+    parser.add_argument('--server', required=True, help='Source server URL (e.g., https://source-tableau-server.com)')
+    parser.add_argument('--site', required=True, help='Source site name (site ID)')
+    parser.add_argument('--token-value', required=True, help='Source site Personal Access Token value')
+    parser.add_argument('--token-name', required=True, help='Source site Personal Access Token name')
+    parser.add_argument('--project-name', required=True, help='Name of the source Tableau project (folder)')
     parser.add_argument('--output-dir', required=True, help='Directory to save the exported workbooks')
+
+    parser.add_argument('--target-server', required=True, help='Target server URL (e.g., https://target-tableau-server.com)')
+    parser.add_argument('--target-site', required=True, help='Target site name (site ID)')
+    parser.add_argument('--target-token-value', required=True, help='Target site Personal Access Token value')
+    parser.add_argument('--target-token-name', required=True, help='Target site Personal Access Token name')
+    parser.add_argument('--target-project-name', required=True, help='Name of the target Tableau project (folder)')
 
     args = parser.parse_args()
 
-    # Create the authentication object
-    tableau_auth = TSC.PersonalAccessTokenAuth(
+    # Step 1: Export workbooks from the source server and site
+    tableau_auth_source = TSC.PersonalAccessTokenAuth(
         token_name=args.token_name,
         personal_access_token=args.token_value,
         site_id=args.site
     )
+    server_source = TSC.Server(args.server, use_server_version=True)
 
-    # Create the server object
-    server = TSC.Server(args.server, use_server_version=True)
+    exported_workbooks = []  # To track exported workbook file paths
 
     try:
-        # Sign in to the server
-        with server.auth.sign_in(tableau_auth):
-            print(f"Successfully signed in as token '{args.token_name}' on site '{args.site}'")
+        # Sign in to the source server
+        with server_source.auth.sign_in(tableau_auth_source):
+            print(f"Successfully signed in to source site '{args.site}'")
 
-            # Step 1: Find the target project (folder) by name
-            target_project = None
-            all_projects, _ = server.projects.get()
+            # Find the source project by name
+            source_project = None
+            all_projects, _ = server_source.projects.get()
             for project in all_projects:
                 if project.name.lower() == args.project_name.lower():
-                    target_project = project
+                    source_project = project
                     break
             
-            if not target_project:
-                print(f"Project (folder) '{args.project_name}' not found on site '{args.site}'.")
+            if not source_project:
+                print(f"Source project '{args.project_name}' not found.")
                 return
             
-            print(f"Found project: {target_project.name} (ID: {target_project.id})")
+            print(f"Found source project: {source_project.name} (ID: {source_project.id})")
 
-            # Step 2: Fetch all workbooks scoped to the project
-            all_workbooks, _ = server.workbooks.get()
+            # Fetch all workbooks in the source project
+            all_workbooks, _ = server_source.workbooks.get()
             project_workbooks = [
-                wb for wb in all_workbooks if wb.project_id == target_project.id
+                wb for wb in all_workbooks if wb.project_id == source_project.id
             ]
 
-            print(f"\nWorkbooks in project '{target_project.name}': {len(project_workbooks)}")
-            for wb in project_workbooks:
-                print(f"- {wb.name} (ID: {wb.id})")
-
-            # Step 3: Export workbooks to the specified directory
+            print(f"Exporting {len(project_workbooks)} workbooks from project '{source_project.name}'...")
             output_dir = args.output_dir
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
@@ -63,13 +65,63 @@ def main():
                 try:
                     print(f"Exporting workbook '{wb.name}'...")
                     filepath = os.path.join(output_dir, f"{wb.name}.twbx")
-                    server.workbooks.download(wb.id, filepath)
+                    server_source.workbooks.download(wb.id, filepath)
+                    exported_workbooks.append(filepath)
                     print(f"Workbook '{wb.name}' exported to: {filepath}")
                 except TSC.ServerResponseError as e:
                     print(f"Failed to export workbook '{wb.name}': {e}")
 
     except TSC.ServerResponseError as e:
-        print(f"Error communicating with Tableau Server: {e}")
+        print(f"Error communicating with source Tableau Server: {e}")
+        return
+
+    # Step 2: Publish workbooks to the target server and site
+    tableau_auth_target = TSC.PersonalAccessTokenAuth(
+        token_name=args.target_token_name,
+        personal_access_token=args.target_token_value,
+        site_id=args.target_site
+    )
+    server_target = TSC.Server(args.target_server, use_server_version=True)
+
+    try:
+        # Sign in to the target server
+        with server_target.auth.sign_in(tableau_auth_target):
+            print(f"\nSuccessfully signed in to target site '{args.target_site}'")
+
+            # Find the target project by name
+            target_project = None
+            all_projects, _ = server_target.projects.get()
+            for project in all_projects:
+                if project.name.lower() == args.target_project_name.lower():
+                    target_project = project
+                    break
+            
+            if not target_project:
+                print(f"Target project '{args.target_project_name}' not found.")
+                return
+            
+            print(f"Found target project: {target_project.name} (ID: {target_project.id})")
+
+            # Publish each exported workbook to the target project
+            published_workbooks = []
+            for filepath in exported_workbooks:
+                try:
+                    workbook_name = os.path.basename(filepath)
+                    print(f"Publishing workbook '{workbook_name}'...")
+                    wb_item = TSC.WorkbookItem(project_id=target_project.id)
+                    server_target.workbooks.publish(wb_item, filepath, TSC.Server.PublishMode.Overwrite)
+                    published_workbooks.append(workbook_name)
+                    print(f"Workbook '{workbook_name}' successfully published to target project.")
+                except TSC.ServerResponseError as e:
+                    print(f"Failed to publish workbook '{workbook_name}': {e}")
+
+            # List published workbooks
+            print(f"\nPublished workbooks to target project '{target_project.name}':")
+            for wb in published_workbooks:
+                print(f"- {wb}")
+
+    except TSC.ServerResponseError as e:
+        print(f"Error communicating with target Tableau Server: {e}")
 
 if __name__ == '__main__':
     main()
