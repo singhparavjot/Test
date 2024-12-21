@@ -28,7 +28,7 @@ def main():
         with server.auth.sign_in(tableau_auth):
             print(f"Successfully signed in as token '{args.token_name}' on site '{args.site}'")
 
-            # Find the target project (folder) by name
+            # Step 1: Find the target project (folder) by name
             target_project = None
             all_projects, _ = server.projects.get()
             for project in all_projects:
@@ -42,20 +42,15 @@ def main():
             
             print(f"Found project: {target_project.name} (ID: {target_project.id})")
 
-            # Query workbooks directly within the project using the project's ID
-            request_options = TSC.RequestOptions()
-            request_options.filter.add(
-                TSC.Filter(
-                    TSC.RequestOptions.Field.ProjectId,
-                    TSC.RequestOptions.Operator.Equals,
-                    target_project.id
-                )
-            )
-            filtered_workbooks, pagination_item = server.workbooks.get(request_options)
+            # Step 2: Fetch all workbooks scoped to the project
+            all_workbooks, _ = server.workbooks.get()
+            project_workbooks = [
+                wb for wb in all_workbooks if wb.project_id == target_project.id
+            ]
 
             # Print the filtered workbooks
-            print(f"\nWorkbooks in project '{target_project.name}': {pagination_item.total_available}")
-            for wb in filtered_workbooks:
+            print(f"\nWorkbooks in project '{target_project.name}': {len(project_workbooks)}")
+            for wb in project_workbooks:
                 print(f"- {wb.name} (ID: {wb.id})")
 
     except TSC.ServerResponseError as e:
