@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import tableauserverclient as TSC
 
 def main():
-    parser = argparse.ArgumentParser(description="List Tableau workbooks in a specific project (folder).")
+    parser = argparse.ArgumentParser(description="List and export Tableau workbooks in a specific project (folder).")
     parser.add_argument('--server', required=True, help='Server URL (e.g., https://my-tableau-server.com)')
     parser.add_argument('--site', required=True, help='Site name (site ID)')
     parser.add_argument('--token-value', required=True, help='Personal Access Token value')
     parser.add_argument('--token-name', required=True, help='Personal Access Token name')
     parser.add_argument('--project-name', required=True, help='Name of the Tableau project (folder)')
+    parser.add_argument('--output-dir', required=True, help='Directory to save the exported workbooks')
 
     args = parser.parse_args()
 
@@ -48,10 +50,23 @@ def main():
                 wb for wb in all_workbooks if wb.project_id == target_project.id
             ]
 
-            # Print the filtered workbooks
             print(f"\nWorkbooks in project '{target_project.name}': {len(project_workbooks)}")
             for wb in project_workbooks:
                 print(f"- {wb.name} (ID: {wb.id})")
+
+            # Step 3: Export workbooks to the specified directory
+            output_dir = args.output_dir
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            for wb in project_workbooks:
+                try:
+                    print(f"Exporting workbook '{wb.name}'...")
+                    filepath = os.path.join(output_dir, f"{wb.name}.twbx")
+                    server.workbooks.download(wb.id, filepath)
+                    print(f"Workbook '{wb.name}' exported to: {filepath}")
+                except TSC.ServerResponseError as e:
+                    print(f"Failed to export workbook '{wb.name}': {e}")
 
     except TSC.ServerResponseError as e:
         print(f"Error communicating with Tableau Server: {e}")
