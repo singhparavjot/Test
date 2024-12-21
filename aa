@@ -4,14 +4,21 @@ import argparse
 def main():
     parser = argparse.ArgumentParser(description="List workbooks in a Tableau project.")
     parser.add_argument("--server", required=True, help="Tableau Server URL")
-    parser.add_argument("--username", required=True, help="Username for Tableau Server")
-    parser.add_argument("--password", required=True, help="Password for Tableau Server")
+    parser.add_argument("--token-name", "-p", help="name of the personal access token used to sign into the server")
+    parser.add_argument("--token-value", "-v", help="value of the personal access token used to sign into the server")
     parser.add_argument("--site", required=True, help="Tableau site name (e.g., 'dev')")
     parser.add_argument("--project", required=True, help="Project name to list workbooks from")
     args = parser.parse_args()
+    parser.add_argument(
+        "--logging-level",
+        "-l",
+        choices=["debug", "info", "error"],
+        default="error",
+        help="desired logging level (set to error by default)",
+    )
 
     # Authenticate to Tableau Server
-    tableau_auth = TSC.TableauAuth(args.username, args.password, args.site)
+    tableau_auth = TSC.PersonalAccessTokenAuth(args.token_name, args.token_value, site_id=args.site)
     server = TSC.Server(args.server, use_server_version=True)
 
     with server.auth.sign_in(tableau_auth):
@@ -34,3 +41,30 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+##########
+
+
+
+listing everything in server
+Traceback (most recent call last):
+  File "/home/vsts/work/1/s/list_workbooks.py", line 43, in <module>
+    main()
+  File "/home/vsts/work/1/s/list_workbooks.py", line 24, in main
+    with server.auth.sign_in(tableau_auth):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.7/x64/lib/python3.12/site-packages/tableauserverclient/server/endpoint/endpoint.py", line 274, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.7/x64/lib/python3.12/site-packages/tableauserverclient/server/endpoint/auth_endpoint.py", line 84, in sign_in
+    self._check_status(server_response, url)
+  File "/opt/hostedtoolcache/Python/3.12.7/x64/lib/python3.12/site-packages/tableauserverclient/server/endpoint/endpoint.py", line 164, in _check_status
+    raise FailedSignInError.from_response(server_response.content, self.parent_srv.namespace, url)
+tableauserverclient.server.endpoint.exceptions.FailedSignInError: Failed Sign In Error: 
+
+	401001: Signin Error
+		Error signing in to Tableau Server
