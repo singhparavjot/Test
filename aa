@@ -1,66 +1,36 @@
-import requests
+import tableauserverclient as TSC
 import argparse
-import sys
-
-def authenticate(server, site, pat_name, pat_token):
-    url = f"{server}/api/3.15/auth/signin"
-    payload = {
-        "credentials": {
-            "personalAccessTokenName": pat_name,
-            "personalAccessTokenSecret": pat_token,
-            "site": {"contentUrl": site}
-        }
-    }
-    response = requests.post(url, json=payload)
-    response.raise_for_status()
-    data = response.json()
-    return data["credentials"]["token"], data["credentials"]["site"]["id"]
-
-def get_project_id(server, auth_token, site_id, project_name):
-    url = f"{server}/api/3.15/sites/{site_id}/projects"
-    headers = {"X-Tableau-Auth": auth_token}
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    projects = response.json()["projects"]["project"]
-    for project in projects:
-        if project["name"] == project_name:
-            return project["id"]
-    raise ValueError(f"Project '{project_name}' not found in the site.")
-
-def list_workbooks(server, auth_token, site_id, project_id, project_name):
-    url = f"{server}/api/3.15/sites/{site_id}/workbooks"
-    headers = {"X-Tableau-Auth": auth_token}
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    workbooks = response.json()["workbooks"]["workbook"]
-    print(f"Workbooks in Project '{project_name}':")
-    for workbook in workbooks:
-        if workbook["project"]["id"] == project_id:
-            print(f"- {workbook['name']} (ID: {workbook['id']})")
 
 def main():
     parser = argparse.ArgumentParser(description="List workbooks in a Tableau project.")
     parser.add_argument("--server", required=True, help="Tableau Server URL")
-    parser.add_argument("--site", required=True, help="Tableau Site name")
-    parser.add_argument("--pat-name", required=True, help="Personal Access Token Name")
-    parser.add_argument("--pat-token", required=True, help="Personal Access Token Value")
+    parser.add_argument("--username", required=True, help="Username for Tableau Server")
+    parser.add_argument("--password", required=True, help="Password for Tableau Server")
+    parser.add_argument("--site", required=True, help="Tableau site name (e.g., 'dev')")
     parser.add_argument("--project", required=True, help="Project name to list workbooks from")
-
     args = parser.parse_args()
 
-    try:
-        # Authenticate and get credentials
-        auth_token, site_id = authenticate(args.server, args.site, args.pat_name, args.pat_token)
+    # Authenticate to Tableau Server
+    tableau_auth = TSC.TableauAuth(args.username, args.password, args.site)
+    server = TSC.Server(args.server, use_server_version=True)
 
-        # Get the project ID
-        project_id = get_project_id(args.server, auth_token, site_id, args.project)
+    with server.auth.sign_in(tableau_auth):
+        # Fetch all projects
+        all_projects, _ = server.projects.get()
+        project = next((proj for proj in all_projects if proj.name == args.project), None)
 
-        # List all workbooks in the project
-        list_workbooks(args.server, auth_token, site_id, project_id, args.project)
+        if not project:
+            print(f"Project '{args.project}' not found.")
+            return
 
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+        # Fetch all workbooks in the specified project
+        req_options = TSC.RequestOptions()
+        req_options.filter.add(TSC.Filter(TSC.RequestOptions.Field.ProjectID, TSC.RequestOptions.Operator.Equals, project.id))
+
+        all_workbooks, _ = server.workbooks.get(req_options)
+        print(f"Workbooks in Project '{args.project}':")
+        for workbook in all_workbooks:
+            print(f"- {workbook.name} (ID: {workbook.id})")
 
 if __name__ == "__main__":
     main()
