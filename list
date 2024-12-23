@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import tableauserverclient as TSC
+
+
+def list_workbooks(args):
+    tableau_auth_source = TSC.PersonalAccessTokenAuth(
+        token_name=args.token_name,
+        personal_access_token=args.token_value,
+        site_id=args.site
+    )
+    server_source = TSC.Server(args.server, use_server_version=True)
+
+    try:
+        with server_source.auth.sign_in(tableau_auth_source):
+            print(f"Successfully signed in to source site '{args.site}'")
+
+            # Find the source project by name
+            all_projects, _ = server_source.projects.get()
+            source_project = next(
+                (proj for proj in all_projects if proj.name.lower() == args.project_name.lower()), None
+            )
+
+            if not source_project:
+                print(f"Source project '{args.project_name}' not found.")
+                return
+
+            print(f"Found source project: {source_project.name} (ID: {source_project.id})")
+
+            # List workbooks in the source project
+            all_workbooks, _ = server_source.workbooks.get()
+            project_workbooks = [
+                wb for wb in all_workbooks if wb.project_id == source_project.id
+            ]
+
+            print(f"\nWorkbooks in project '{source_project.name}': {len(project_workbooks)}")
+            for wb in project_workbooks:
+                print(f"- {wb.name} (ID: {wb.id})")
+
+    except TSC.ServerResponseError as e:
+        print(f"Error communicating with source Tableau Server: {e}")
+
+
+def export_workbooks(args):
+    tableau_auth_source = TSC.PersonalAccessTokenAuth(
+        token_name=args.token_name,
+        personal_access_token=args.token_value,
+        site_id=args.site
+    )
+    server_source = TSC.Server(args.server, use_server_version=True)
+
+    try:
+        with server_source.auth.sign_in(tableau_auth_source):
+            print(f"Successfully signed in to source site '{args.site}'")
+
+            # Find the source project by name
+            all_projects, _ = server_source.projects.get()
+            source_project = next(
+                (proj for proj in all_projects if proj.name.lower() == args.project_name.lower()), None
+            )
+
+            if not source_project:
+                print(f"Source project '{args.project_name}' not found.")
+                return
+
+            print(f"Found source project: {source_project.name} (ID: {source_project.id})")
+
+            # Fetch and export workbooks in the source project
+            all_workbooks, _ = server_source.workbooks.get()
+            project_workbooks = [
+                wb for wb in all_workbooks if wb.project_id == source_project.id
+            ]
+
+            print(f"Exporting {len(project_workbooks)} workbooks from project '{source_project.name}'...")
+            output_dir = args.output_dir
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            for wb in project_workbooks:
+                try:
+                    print(f"Exporting workbook '{wb.name}'...")
+                    filepath = os.path.join(output_dir, f"{wb.name}.twbx")
+                    server_source.workbooks.download(wb.id, filepath)
+                    print(f"Workbook '{wb.name}' exported to: {filepath}")
+                except TSC.ServerResponseError as e:
+                    print(f"Failed to export workbook '{wb.name}': {e}")
+
+    except TSC.ServerResponseError as e:
+        print(f"Error communicating with source Tableau Server: {e}")
+
+
+def publish_workbooks(args):
+    tableau_auth_target = TSC.PersonalAccessTokenAuth(
+        token_name=args.target_token_name,
+        personal_access_token=args.target_token_value,
+        site_id=args.target_site
+    )
+    server_target = TSC.Server(args.target_server, use_server_version=True)
+
+    try:
+        with server_target.auth.sign_in(tableau_auth_target):
+            print(f"Successfully signed in to target site '{args.target_site}'")
+
+            # Find the target project by name
+            all_projects, _ = server_target.projects.get()
+            target_project = next(
+                (proj for proj in all_projects if proj.name.lower() == args.target_project_name.lower()), None
+            )
+
+            if not target_project:
+                print(f"Target project '{args.target_project_name}' not found.")
+                return
+
+            print(f"Found target project: {target_project.name} (ID: {target_project.id})")
+
+            # Load and publish workbooks from output directory
+            if not os.path.exists(args.output_dir):
+                print(f"Error: The specified output directory '{args.output_dir}' does not exist.")
+                return
+
+            workbook_files = [os.path.join(args.output_dir, f) for f in os.listdir(args.output_dir) if f.endswith('.twbx')]
+            if not workbook_files:
+                print(f"No workbooks found in the directory '{args.output_dir}'.")
+                return
+
+            published_workbooks = []
+            for filepath in workbook_files:
+                try:
+                    workbook_name = os.path.basename(filepath)
+                    print(f"Publishing workbook '{workbook_name}'...")
+                    wb_item = TSC.WorkbookItem(project_id=target_project.id)
+                    server_target.workbooks.publish(wb_item, filepath, TSC.Server.PublishMode.Overwrite)
+                    published_workbooks.append(workbook_name)
+                    print(f"Workbook '{workbook_name}' successfully published.")
+                except TSC.ServerResponseError as e:
+                    print(f"Failed to publish workbook '{workbook_name}': {e}")
+
+            print(f"\nPublished workbooks to target project '{target_project.name}':")
+            for wb in published_workbooks:
+                print(f"- {wb}")
+
+    except TSC.ServerResponseError as e:
+        print(f"Error communicating with target Tableau Server: {e}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Export, publish, or list Tableau workbooks.")
+    parser.add_argument('--mode', required=True, choices=['export', 'publish', 'list'], help="Mode of operation: 'export', 'publish', or 'list'")
+
+    # Arguments for list and export mode
+    parser.add_argument('--server', help='Source server URL (e.g., https://source-tableau-server.com)')
+    parser.add_argument('--site', help='Source site name (site ID)')
+    parser.add_argument('--token-value', help='Source site Personal Access Token value')
+    parser.add_argument('--token-name', help='Source site Personal Access Token name')
+    parser.add_argument('--project-name', help='Name of the source Tableau project (folder)')
+
+    # Arguments for both modes
+    parser.add_argument('--output-dir', help='Directory to save/export workbooks or load for publishing')
+
+    # Arguments for publish mode
+    parser.add_argument('--target-server', help='Target server URL (e.g., https://target-tableau-server.com)')
+    parser.add_argument('--target-site', help='Target site name (site ID)')
+    parser.add_argument('--target-token-value', help='Target site Personal Access Token value')
+    parser.add_argument('--target-token-name', help='Target site Personal Access Token name')
+    parser.add_argument('--target-project-name', help='Name of the target Tableau project (folder)')
+
+    args = parser.parse_args()
+
+    if args.mode == 'list':
+        if not (args.server and args.site and args.token_value and args.token_name and args.project_name):
+            print("Error: --server, --site, --token-value, --token-name, and --project-name are required for list mode.")
+            return
+        list_workbooks(args)
+
+    elif args.mode == 'export':
+        if not (args.server and args.site and args.token_value and args.token_name and args.project_name and args.output_dir):
+            print("Error: --server, --site, --token-value, --token-name, --project-name, and --output-dir are required for export mode.")
+            return
+        export_workbooks(args)
+
+    elif args.mode == 'publish':
+        if not (args.target_server and args.target_site and args.target_token_value and args.target_token_name and args.target_project_name and args.output_dir):
+            print("Error: --target-server, --target-site, --target-token-value, --target-token-name, --target-project-name, and --output-dir are required for publish mode.")
+            return
+        publish_workbooks(args)
+
+
+if __name__ == '__main__':
+    main()
